@@ -206,7 +206,7 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     }
 
     for (const item of graphs) {
-      if (!item.visible || item.graph.kind === 'surface' || item.graph.kind === 'spaceCurve') continue
+      if (!item.visible || ['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(item.graph.kind)) continue
       ctx.strokeStyle = item.color
       ctx.lineWidth = 2.7
       ctx.lineCap = 'round'

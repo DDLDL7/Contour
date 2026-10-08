@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { evaluateSpatialPoint, type PlottableGraph } from '../lib/math'
+import { sampleImplicitSurface, sampleParametricSurface, type MeshSamples } from '../lib/meshing'
 
 interface Props {
   graphs: PlottableGraph[]
@@ -103,6 +104,23 @@ function makeSpaceCurve(graph: PlottableGraph, parameterA: number): THREE.Mesh[]
   return meshes
 }
 
+function makeSampledSurface(samples: MeshSamples, color: string, wireframe: boolean): THREE.Mesh | null {
+  if (samples.positions.length === 0 || (samples.indices && samples.indices.length === 0)) return null
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(samples.positions, 3))
+  if (samples.indices) geometry.setIndex(samples.indices)
+  geometry.computeVertexNormals()
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    side: THREE.DoubleSide,
+    roughness: 0.68,
+    transparent: true,
+    opacity: wireframe ? 1 : 0.88,
+    wireframe,
+  })
+  return new THREE.Mesh(geometry, material)
+}
+
 export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<SceneState | null>(null)
@@ -178,22 +196,69 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
   useEffect(() => {
     const state = sceneRef.current
     if (!state) return
+    let active = true
     for (const child of [...state.surfaces.children]) {
       const mesh = child as THREE.Mesh
       state.surfaces.remove(child)
       mesh.geometry.dispose()
       ;(mesh.material as THREE.Material).dispose()
     }
+    const advanced = new Map<string, PlottableGraph>()
     for (const graph of graphs) {
       if (!graph.visible) continue
       if (graph.graph.kind === 'surface') {
         const mesh = makeSurface(graph, parameterA, wireframe)
         if (mesh) state.surfaces.add(mesh)
+      } else if (graph.graph.kind === 'parametricSurface' || graph.graph.kind === 'implicitSurface') {
+        advanced.set(graph.id, graph)
       } else if (graph.graph.kind === 'spaceCurve') {
         state.surfaces.add(...makeSpaceCurve(graph, parameterA))
       }
     }
     state.renderer.render(state.scene, state.camera)
+    const addAdvanced = (graph: PlottableGraph, samples?: MeshSamples) => {
+      if (!active) return
+      const result = samples ?? (graph.graph.kind === 'parametricSurface'
+        ? sampleParametricSurface(graph.graph, parameterA)
+        : sampleImplicitSurface(graph.graph, parameterA))
+      const mesh = makeSampledSurface(result, graph.color, wireframe)
+      if (mesh) state.surfaces.add(mesh)
+      state.renderer.render(state.scene, state.camera)
+    }
+    let worker: Worker | null = null
+    const completed = new Set<string>()
+    if (advanced.size > 0) {
+      try {
+        worker = new Worker(new URL('../workers/meshing.worker.ts', import.meta.url), { type: 'module' })
+        worker.onmessage = (event: MessageEvent<{ id: string; samples?: MeshSamples; error?: string }>) => {
+          const graph = advanced.get(event.data.id)
+          if (graph && !completed.has(graph.id)) {
+            addAdvanced(graph, event.data.error ? undefined : event.data.samples)
+            completed.add(graph.id)
+          }
+        }
+        worker.onerror = () => {
+          worker?.terminate()
+          worker = null
+          for (const graph of advanced.values()) if (!completed.has(graph.id)) addAdvanced(graph)
+        }
+        for (const graph of advanced.values()) {
+          worker.postMessage({
+            id: graph.id,
+            source: graph.graph.source,
+            definitions: graph.graph.definitions,
+            parameterA,
+          })
+        }
+      } catch {
+        worker?.terminate()
+        for (const graph of advanced.values()) if (!completed.has(graph.id)) addAdvanced(graph)
+      }
+    }
+    return () => {
+      active = false
+      worker?.terminate()
+    }
   }, [graphs, parameterA, wireframe])
 
   return (

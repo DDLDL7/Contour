@@ -5,12 +5,14 @@ Contour is an offline-capable graphing calculator for students, built for the we
 ## What works today
 
 - Plot explicit 2D functions, vertical lines, polar and parametric curves, implicit equations, and shaded inequalities.
-- Explore explicit 3D surfaces and parametric space curves with rotation and zoom controls.
+- Plot piecewise 2D functions and functions with a domain condition.
+- Explore explicit, parametric, and implicit 3D surfaces, plus parametric space curves, with rotation and zoom controls. Advanced surface meshing runs in a cancellable worker.
 - Trace 2D functions and inspect approximate roots, turning points, intersections, and tangent slopes in the visible view.
 - Edit expressions in mathematical notation, and vary the parameter `a` with a slider.
 - Define shared variables such as `b = 2a` and reuse them in 2D or 3D graphs; circular definitions show an error.
 - Undo and redo project edits, including equation typing, title changes, slider moves, and adding or removing expressions.
 - Save work automatically on the device, export and import project files, and export graph images.
+- Use Maths tools for calculations, basic symbolic algebra and differentiation, numerical calculus, matrix determinant and inverse, statistics, linear regression, and an initial-value ODE estimate.
 - Use the packaged macOS app offline. The production web app caches its assets after an initial visit for later offline use.
 
 ## Run the web app
@@ -49,6 +51,10 @@ Expressions are editable in live maths notation. Type `/` for a stacked fraction
 - `x = 3*cos(t), y = 3*sin(t)` for a parametric circle, with t from 0 to 2π.
 - `x^2 + y^2 = 9` for an implicit circle.
 - `x^2 + y^2 <= 9` for a shaded disk; strict inequalities use a dashed boundary.
+- `y = x^2 {x >= 0}` to restrict a function's domain.
+- `y = {x < 0: -x, x >= 0: x^2}` for a piecewise function.
+- `x = (2 + cos(v))*cos(u), y = (2 + cos(v))*sin(u), z = sin(v)` for a parametric torus, with u and v from 0 to 2π.
+- `x^2 + y^2 + z^2 = 9` for an implicit sphere; the 3D mesh is sampled within ±6 on each axis.
 - Supported functions include trigonometry, roots, logarithms, absolute value, rounding, minimum, and maximum.
 
 Drag the 2D graph to pan, or the 3D graph to rotate. Scroll to zoom. Move the `a` slider to update any expression that uses it. Projects autosave in the current browser or app installation; **Save project** downloads a portable JSON copy, and **Open** imports one.
@@ -59,9 +65,11 @@ On the 2D graph, click near a `y =` function to trace its coordinates and estima
 
 The 2D zoom now extends well beyond ±30 on both axes. Use the crosshair button to reset a graph that has been panned away from its origin.
 
+The **Maths tools** tab accepts expressions in mathematical notation and can use valid workspace variables. Solve supports linear and quadratic equations in `x`; matrix operations accept square 2×2 to 4×4 arrays entered as rows separated by semicolons; statistics accepts comma-separated numbers; regression accepts `x,y` pairs separated by semicolons. Integrals use a fixed 512-interval Simpson approximation, limits use nearby numerical samples, and the ODE tool uses a 500-step fourth-order Runge–Kutta estimate. Tool results are temporary and are not saved in the project yet.
+
 ## Scope of this version
 
-This version does not yet solve equations symbolically, draw parametric or implicit 3D surfaces, support custom parameter ranges or additional sliders, or sync projects between devices. Shared variables are currently single lowercase letters; `a` remains the built-in slider, and `x`, `y`, `z`, `r`, and `t` retain their graphing roles. Implicit curves and inequality boundaries are sampled over the visible viewport, so features smaller than the sampling grid may be missed. Graph analysis currently covers explicit 2D functions only. Local autosave is stored in browser storage, so export a project file for a durable backup.
+This version does not yet offer general symbolic solving, exact fractions and integrals, custom parameter ranges, additional sliders, vector fields, cross-sections, or cloud sync. Shared variables are currently single lowercase letters; `a` remains the built-in slider, and `x`, `y`, `z`, `r`, and `t` retain their graphing roles. Parametric surfaces use fixed 0–2π ranges, and implicit 3D surfaces use a fixed-resolution mesh in a bounded cube, so small features or distant surfaces may be missed. Implicit 2D curves and inequality boundaries are sampled over the visible viewport. Graph analysis currently covers explicit 2D functions only. Local autosave is stored in browser storage, so export a project file for a durable backup.
 
 ## Verify
 

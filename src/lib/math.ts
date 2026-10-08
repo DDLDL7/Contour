@@ -1,16 +1,19 @@
 import { FunctionNode, parse, SymbolNode, type MathNode } from 'mathjs'
 
-export type GraphKind = 'curve' | 'vertical' | 'surface' | 'spaceCurve' | 'polar' | 'parametric' | 'implicit' | 'inequality'
+export type GraphKind = 'curve' | 'vertical' | 'surface' | 'spaceCurve' | 'parametricSurface' | 'implicitSurface' | 'polar' | 'parametric' | 'implicit' | 'inequality'
 export type RelationOperator = '=' | '<' | '<=' | '>' | '>='
 
 export interface GraphExpression {
   kind: GraphKind
   label: string
+  source: string
+  definitions: Readonly<Record<string, number>>
   inferredFunctions: string[]
   relation?: RelationOperator
   evaluate: (x: number, y: number, a: number) => number
   evaluateY?: (t: number, y: number, a: number) => number
   evaluateZ?: (t: number, y: number, a: number) => number
+  evaluate3D?: (x: number, y: number, z: number, a: number) => number
 }
 
 export interface PlottableGraph {
@@ -71,13 +74,17 @@ interface CompiledFormula {
   evaluate: (scope: Record<string, number>) => number
 }
 
-function compileFormula(source: string, variables: string[], defaultVariable: string, inferFunctions = true): CompiledFormula {
-  if (!source.trim()) throw new Error('Finish the expression before graphing it.')
+export function normalizeMathSource(source: string): string {
   // MathLive emits `sin x` for a function applied to a single symbol.
-  const normalized = source.replace(
+  return source.replace(
     /(?<![A-Za-z_])(sin|cos|tan)\s+(theta|[xyat])(\s*\^\s*\d+(?:\.\d+)?)?/g,
     (_match, name: string, variable: string, power: string = '') => `${name}(${variable}${power})`,
   )
+}
+
+function compileFormula(source: string, variables: string[], defaultVariable: string, inferFunctions = true): CompiledFormula {
+  if (!source.trim()) throw new Error('Finish the expression before graphing it.')
+  const normalized = normalizeMathSource(source)
   let tree: MathNode
   try {
     tree = parse(normalized)
@@ -134,8 +141,8 @@ function splitTopLevelParts(input: string): string[] {
   const parts: string[] = []
   for (let index = 0; index < input.length; index += 1) {
     const character = input[index]
-    if (character === '(') depth += 1
-    if (character === ')') depth -= 1
+    if (character === '(' || character === '{') depth += 1
+    if (character === ')' || character === '}') depth -= 1
     if (depth === 0 && (character === ',' || character === ';')) {
       parts.push(input.slice(start, index).trim())
       start = index + 1
@@ -150,8 +157,8 @@ function splitTopLevelRelation(input: string): { left: string; right: string; op
   let found: { left: string; right: string; operator: RelationOperator } | null = null
   for (let index = 0; index < input.length; index += 1) {
     const character = input[index]
-    if (character === '(') depth += 1
-    if (character === ')') depth -= 1
+    if (character === '(' || character === '{') depth += 1
+    if (character === ')' || character === '}') depth -= 1
     if (depth !== 0 || !'=<>≤≥'.includes(character)) continue
     if (found) throw new Error('Use one equality or inequality per expression.')
     const next = input[index + 1]
@@ -164,6 +171,27 @@ function splitTopLevelRelation(input: string): { left: string; right: string; op
   return found
 }
 
+function compileCondition(source: string, definitions: Readonly<Record<string, number>>): (x: number, a: number) => boolean {
+  const relation = splitTopLevelRelation(source)
+  if (!relation) throw new Error('Use a condition such as x < 0.')
+  const names = ['x', ...Object.keys(definitions)]
+  const left = compileFormula(relation.left, names, 'x')
+  const right = compileFormula(relation.right, names, 'x')
+  return (x, a) => {
+    const scope = { ...definitions, x, a }
+    const first = left.evaluate(scope)
+    const second = right.evaluate(scope)
+    if (!Number.isFinite(first) || !Number.isFinite(second)) return false
+    switch (relation.operator) {
+      case '<': return first < second
+      case '<=': return first <= second
+      case '>': return first > second
+      case '>=': return first >= second
+      case '=': return Math.abs(first - second) < 1e-10
+    }
+  }
+}
+
 export function compileGraph(input: string, definitions: Readonly<Record<string, number>> = {}): GraphExpression {
   const trimmed = input.trim()
   if (!trimmed) throw new Error('Enter an expression to graph.')
@@ -173,29 +201,40 @@ export function compileGraph(input: string, definitions: Readonly<Record<string,
   if ((parts.length === 2 || parts.length === 3) && /^x\s*=/i.test(parts[0]) && /^y\s*=/i.test(parts[1]) && (parts.length === 2 || /^z\s*=/i.test(parts[2]))) {
     const xSource = parts[0].replace(/^x\s*=/i, '').trim()
     const ySource = parts[1].replace(/^y\s*=/i, '').trim()
-    const xFormula = compileFormula(xSource, ['t', ...names], 't')
-    const yFormula = compileFormula(ySource, ['t', ...names], 't')
-    const zFormula = parts.length === 3 ? compileFormula(parts[2].replace(/^z\s*=/i, '').trim(), ['t', ...names], 't') : null
+    const axes = parts.length === 3 ? ['t', 'u', 'v', ...names] : ['t', ...names]
+    const xFormula = compileFormula(xSource, axes, 't')
+    const yFormula = compileFormula(ySource, axes, 't')
+    const zFormula = parts.length === 3 ? compileFormula(parts[2].replace(/^z\s*=/i, '').trim(), axes, 't') : null
+    const symbols = new Set([...xFormula.symbols, ...yFormula.symbols, ...(zFormula?.symbols ?? [])])
+    const isSurface = Boolean(zFormula && (symbols.has('u') || symbols.has('v')))
+    if (isSurface && symbols.has('t')) throw new Error('Use u and v for a surface, or t for a space curve.')
     return {
-      kind: zFormula ? 'spaceCurve' : 'parametric',
+      kind: isSurface ? 'parametricSurface' : zFormula ? 'spaceCurve' : 'parametric',
       label: trimmed,
+      source: trimmed,
+      definitions,
       inferredFunctions: [...new Set([...xFormula.inferredFunctions, ...yFormula.inferredFunctions, ...(zFormula?.inferredFunctions ?? [])])],
-      evaluate: (t, _y, a) => xFormula.evaluate({ ...definitions, t, a }),
-      evaluateY: (t, _y, a) => yFormula.evaluate({ ...definitions, t, a }),
-      evaluateZ: zFormula ? (t, _y, a) => zFormula.evaluate({ ...definitions, t, a }) : undefined,
+      evaluate: (first, second, a) => xFormula.evaluate(isSurface ? { ...definitions, u: first, v: second, a } : { ...definitions, t: first, a }),
+      evaluateY: (first, second, a) => yFormula.evaluate(isSurface ? { ...definitions, u: first, v: second, a } : { ...definitions, t: first, a }),
+      evaluateZ: zFormula ? (first, second, a) => zFormula.evaluate(isSurface ? { ...definitions, u: first, v: second, a } : { ...definitions, t: first, a }) : undefined,
     }
   }
 
   const relation = splitTopLevelRelation(trimmed)
   if (relation && !(relation.operator === '=' && /^[xyzr]$/i.test(relation.left))) {
-    const left = compileFormula(relation.left, ['x', 'y', ...names], 'x')
-    const right = compileFormula(relation.right, ['x', 'y', ...names], 'x')
+    const left = compileFormula(relation.left, ['x', 'y', 'z', ...names], 'x')
+    const right = compileFormula(relation.right, ['x', 'y', 'z', ...names], 'x')
+    const usesZ = left.symbols.includes('z') || right.symbols.includes('z')
+    if (usesZ && relation.operator !== '=') throw new Error('3D inequalities are not supported yet.')
     return {
-      kind: relation.operator === '=' ? 'implicit' : 'inequality',
+      kind: usesZ ? 'implicitSurface' : relation.operator === '=' ? 'implicit' : 'inequality',
       label: trimmed,
+      source: trimmed,
+      definitions,
       relation: relation.operator,
       inferredFunctions: [...new Set([...left.inferredFunctions, ...right.inferredFunctions])],
       evaluate: (x, y, a) => left.evaluate({ ...definitions, x, y, a }) - right.evaluate({ ...definitions, x, y, a }),
+      evaluate3D: usesZ ? (x, y, z, a) => left.evaluate({ ...definitions, x, y, z, a }) - right.evaluate({ ...definitions, x, y, z, a }) : undefined,
     }
   }
 
@@ -204,13 +243,33 @@ export function compileGraph(input: string, definitions: Readonly<Record<string,
   const kind: GraphKind = target === 'z' ? 'surface' : target === 'x' ? 'vertical' : target === 'r' ? 'polar' : 'curve'
   const variables = kind === 'surface' ? ['x', 'y'] : kind === 'curve' ? ['x'] : kind === 'polar' ? ['theta'] : []
   const defaultVariable = kind === 'polar' ? 'theta' : 'x'
-  const formula = compileFormula(source, [...variables, ...names], defaultVariable)
+  if (kind === 'curve' && source.startsWith('{') && source.endsWith('}')) {
+    const pieces = splitTopLevelParts(source.slice(1, -1)).map((piece) => {
+      const colon = piece.indexOf(':')
+      if (colon < 0) throw new Error('Write each piece as condition: expression.')
+      return {
+        matches: compileCondition(piece.slice(0, colon), definitions),
+        formula: compileFormula(piece.slice(colon + 1), ['x', ...names], 'x'),
+      }
+    })
+    if (pieces.length === 0) throw new Error('Add at least one piece.')
+    return {
+      kind, label: `${target} = ${source}`, source: trimmed, definitions,
+      inferredFunctions: [...new Set(pieces.flatMap((piece) => piece.formula.inferredFunctions))],
+      evaluate: (x, _y, a) => pieces.find((piece) => piece.matches(x, a))?.formula.evaluate({ ...definitions, x, a }) ?? Number.NaN,
+    }
+  }
+  const restricted = kind === 'curve' ? /^(.*?)\s*\{([^{}]+)\}$/.exec(source) : null
+  const condition = restricted ? compileCondition(restricted[2], definitions) : null
+  const formula = compileFormula(restricted ? restricted[1] : source, [...variables, ...names], defaultVariable)
 
   return {
     kind,
     label: `${target} = ${source}`,
+    source: trimmed,
+    definitions,
     inferredFunctions: formula.inferredFunctions,
-    evaluate: (x, y, a) => formula.evaluate(kind === 'polar' ? { ...definitions, theta: x, a } : { ...definitions, x, y, a }),
+    evaluate: (x, y, a) => condition && !condition(x, a) ? Number.NaN : formula.evaluate(kind === 'polar' ? { ...definitions, theta: x, a } : { ...definitions, x, y, a }),
   }
 }
 

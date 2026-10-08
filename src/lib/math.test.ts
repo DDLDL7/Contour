@@ -112,4 +112,16 @@ describe('graph expression compilation', () => {
     expect(exterior.evaluate(4, 0, 0)).toBeGreaterThan(0)
     expect(() => compileGraph('x^2 + y^2 = 9 = 10')).toThrow('one equality')
   })
+
+  it('supports domain restrictions and piecewise 2D functions', () => {
+    const restricted = compileGraph('y = x^2 {x >= 0}')
+    expect(restricted.kind).toBe('curve')
+    expect(restricted.evaluate(-2, 0, 1)).toBeNaN()
+    expect(restricted.evaluate(2, 0, 1)).toBe(4)
+
+    const piecewise = compileGraph('y = {x < 0: -x, x >= 0: x^2}')
+    expect(piecewise.evaluate(-3, 0, 1)).toBe(3)
+    expect(piecewise.evaluate(2, 0, 1)).toBe(4)
+    expect(() => compileGraph('y = {x < 0, x >= 0: x}')).toThrow('condition: expression')
+  })
 })

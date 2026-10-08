@@ -1,24 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Plus, Redo2, RotateCcw, Trash2, Undo2, Upload } from 'lucide-react'
+import { Box, Calculator, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Plus, Redo2, RotateCcw, Trash2, Undo2, Upload } from 'lucide-react'
 import { Graph2D } from './components/Graph2D'
 import { Graph3D } from './components/Graph3D'
 import { EquationField } from './components/EquationField'
+import { MathTools } from './components/MathTools'
 import { formatNumber, type GraphExpression, type PlottableGraph } from './lib/math'
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
 import { compileWorkspace } from './lib/workspace'
 
-type View = '2d' | '3d'
+type View = '2d' | '3d' | 'tools'
 
 function describeGraph(graph: GraphExpression): string {
   const kind = graph.kind === 'surface' ? '3D surface'
+    : graph.kind === 'implicitSurface' ? 'Implicit 3D surface'
+    : graph.kind === 'parametricSurface' ? 'Parametric 3D surface'
     : graph.kind === 'spaceCurve' ? '3D space curve'
     : graph.kind === 'vertical' ? 'Vertical line'
       : graph.kind === 'polar' ? 'Polar curve'
         : graph.kind === 'parametric' ? 'Parametric curve'
           : graph.kind === 'implicit' ? 'Implicit curve'
             : graph.kind === 'inequality' ? 'Shaded region' : '2D curve'
-  const variable = graph.kind === 'polar' ? 'θ' : graph.kind === 'parametric' || graph.kind === 'spaceCurve' ? 't' : 'x'
+  const variable = graph.kind === 'polar' ? 'θ' : graph.kind === 'parametric' || graph.kind === 'spaceCurve' ? 't' : graph.kind === 'parametricSurface' ? 'u' : 'x'
   const inference = graph.inferredFunctions.map((name) => `${name} means ${name}(${variable})`).join(', ')
   return inference ? `${kind} · ${inference}` : kind
 }
@@ -44,6 +47,7 @@ function App() {
   }
 
   const compiledRows = useMemo(() => compileWorkspace(project.expressions, project.parameterA), [project.expressions, project.parameterA])
+  const definitions = useMemo(() => Object.fromEntries(compiledRows.flatMap((row) => row.definition ? [[row.definition.name, row.definition.value]] : [])), [compiledRows])
 
   const graphs = useMemo<PlottableGraph[]>(() => compiledRows.flatMap((row) => row.graph ? [{
     id: row.id,
@@ -53,8 +57,8 @@ function App() {
   }] : []), [compiledRows])
 
   const activeCount = graphs.filter((item) => item.visible && (view === '2d'
-    ? item.graph.kind !== 'surface' && item.graph.kind !== 'spaceCurve'
-    : item.graph.kind === 'surface' || item.graph.kind === 'spaceCurve')).length
+    ? !['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(item.graph.kind)
+    : view === '3d' && ['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(item.graph.kind))).length
 
   useEffect(() => {
     setSaveStatus('Saving…')
@@ -243,6 +247,8 @@ function App() {
             <button type="button" onClick={() => addExample('x^2 + y^2 <= 9')}>Shaded disk</button>
             <button type="button" onClick={() => addExample('b = 2a')}>Variable b</button>
             <button type="button" onClick={() => addExample('x = 2a*cos(t), y = 2a*sin(t), z = t/2', '3d')}>3D helix</button>
+            <button type="button" onClick={() => addExample('x = (2 + cos(v))*cos(u), y = (2 + cos(v))*sin(u), z = sin(v)', '3d')}>Torus</button>
+            <button type="button" onClick={() => addExample('x^2 + y^2 + z^2 = 9', '3d')}>Sphere</button>
           </div>
 
           <div className="parameter-panel">
@@ -272,17 +278,19 @@ function App() {
             <div className="view-switch" role="tablist" aria-label="Graph dimension">
               <button type="button" role="tab" aria-selected={view === '2d'} className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')}><ChartNoAxesCombined size={17} /> 2D graph</button>
               <button type="button" role="tab" aria-selected={view === '3d'} className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')}><Box size={17} /> 3D graph</button>
+              <button type="button" role="tab" aria-selected={view === 'tools'} className={view === 'tools' ? 'active' : ''} onClick={() => setView('tools')}><Calculator size={17} /> Maths tools</button>
             </div>
             <div className="toolbar-right">
-              <span className="graph-count">{activeCount} {activeCount === 1 ? 'graph' : 'graphs'}</span>
-              <button className="export-image" type="button" onClick={exportImage}><Download size={16} /> <span>Export image</span></button>
+              {view !== 'tools' && <><span className="graph-count">{activeCount} {activeCount === 1 ? 'graph' : 'graphs'}</span>
+                <button className="export-image" type="button" onClick={exportImage}><Download size={16} /> <span>Export image</span></button></>}
             </div>
           </div>
           <div className="graph-wrap">
             {view === '2d'
               ? <Graph2D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} />
-              : <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} />}
-            {activeCount === 0 && (
+              : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} />
+                : <MathTools parameterA={project.parameterA} definitions={definitions} />}
+            {view !== 'tools' && activeCount === 0 && (
               <div className="graph-empty" role="status">
                 <div className="graph-empty-icon">{view === '2d' ? <ChartNoAxesCombined size={24} /> : <Box size={24} />}</div>
                 <strong>No {view.toUpperCase()} graph yet</strong>
@@ -291,7 +299,7 @@ function App() {
               </div>
             )}
           </div>
-          <div className="visual-footer"><span>Your graphs stay on this device until you export them.</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
+          <div className="visual-footer"><span>{view === 'tools' ? 'Tool results are temporary; project expressions continue to save locally.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
         </section>
       </main>
 
@@ -308,11 +316,13 @@ function App() {
             <div className="help-example"><span>For 2D</span><code>y = a*sin(x)</code></div>
             <div className="help-example"><span>For 3D</span><code>z = sin(sqrt(x^2 + y^2))</code></div>
             <div className="help-example"><span>3D curve</span><code>x = 2a cos(t), y = 2a sin(t), z = t/2</code></div>
+            <div className="help-example"><span>3D surface</span><code>x = (2 + cos(v)) cos(u), y = (2 + cos(v)) sin(u), z = sin(v)</code></div>
+            <div className="help-example"><span>Implicit 3D</span><code>x² + y² + z² = 9</code></div>
             <div className="help-example"><span>Polar</span><code>r = 2sin(3θ)</code></div>
             <div className="help-example"><span>Parametric</span><code>x = 3cos(t), y = 3sin(t)</code></div>
             <div className="help-example"><span>Implicit</span><code>x^2 + y^2 = 9</code></div>
             <div className="help-example"><span>Inequality</span><code>x^2 + y^2 ≤ 9</code></div>
-            <p>Polar curves use θ from 0 to 2π radians. Planar parametric curves use t from 0 to 2π; 3D space curves use t from 0 to 4π.</p>
+            <p>Polar curves use θ from 0 to 2π radians. Planar parametric curves use t from 0 to 2π; 3D space curves use t from 0 to 4π. Parametric surfaces use u and v from 0 to 2π.</p>
             <p>Use the <strong>a</strong> slider to explore how a parameter changes a graph. Drag the canvas to pan or rotate, and scroll to zoom.</p>
             <p>Define a variable in any expression row, such as <code>b = 2a</code>, then use it in another row, such as <code>y = b sin(x)</code>. Variables can depend on each other; circular definitions show an error.</p>
             <p>In 2D, click a function to trace its coordinates and approximate slope. Use the <strong>ƒ′</strong> button to mark roots, turning points, and intersections of visible <code>y =</code> functions.</p>
