@@ -3,23 +3,14 @@ import { Box, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Plus, Redo
 import { Graph2D } from './components/Graph2D'
 import { Graph3D } from './components/Graph3D'
 import { EquationField } from './components/EquationField'
-import { compileGraph, formatNumber, type PlottableGraph } from './lib/math'
+import { formatNumber, type GraphExpression, type PlottableGraph } from './lib/math'
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
+import { compileWorkspace } from './lib/workspace'
 
 type View = '2d' | '3d'
 
-interface CompiledRow {
-  id: string
-  text: string
-  latex?: string
-  color: string
-  visible: boolean
-  graph?: ReturnType<typeof compileGraph>
-  error?: string
-}
-
-function describeGraph(graph: NonNullable<CompiledRow['graph']>): string {
+function describeGraph(graph: GraphExpression): string {
   const kind = graph.kind === 'surface' ? '3D surface'
     : graph.kind === 'spaceCurve' ? '3D space curve'
     : graph.kind === 'vertical' ? 'Vertical line'
@@ -52,14 +43,7 @@ function App() {
     ))
   }
 
-  const compiledRows = useMemo<CompiledRow[]>(() => project.expressions.map((row) => {
-    if (!row.text.trim()) return { ...row }
-    try {
-      return { ...row, graph: compileGraph(row.text) }
-    } catch (error) {
-      return { ...row, error: error instanceof Error ? error.message : 'This expression could not be graphed.' }
-    }
-  }), [project.expressions])
+  const compiledRows = useMemo(() => compileWorkspace(project.expressions, project.parameterA), [project.expressions, project.parameterA])
 
   const graphs = useMemo<PlottableGraph[]>(() => compiledRows.flatMap((row) => row.graph ? [{
     id: row.id,
@@ -243,6 +227,7 @@ function App() {
                   <button className="icon-button row-action delete-action" type="button" onClick={() => setProject((current) => ({ ...current, expressions: current.expressions.filter((item) => item.id !== row.id) }))} aria-label={`Remove expression ${index + 1}`} title="Remove"><Trash2 size={16} /></button>
                 </div>
                 {row.error && <p className="expression-error" role="status">{row.error}</p>}
+                {!row.error && row.definition && <p className="expression-type">Variable · {row.definition.name} = {formatNumber(row.definition.value, 5)}</p>}
                 {!row.error && row.graph && <p className="expression-type">{describeGraph(row.graph)}</p>}
               </div>
             ))}
@@ -256,6 +241,7 @@ function App() {
             <button type="button" onClick={() => addExample('x = 3*cos(t), y = 3*sin(t)')}>Parametric circle</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 = 9')}>Implicit circle</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 <= 9')}>Shaded disk</button>
+            <button type="button" onClick={() => addExample('b = 2a')}>Variable b</button>
             <button type="button" onClick={() => addExample('x = 2a*cos(t), y = 2a*sin(t), z = t/2', '3d')}>3D helix</button>
           </div>
 
@@ -328,6 +314,7 @@ function App() {
             <div className="help-example"><span>Inequality</span><code>x^2 + y^2 ≤ 9</code></div>
             <p>Polar curves use θ from 0 to 2π radians. Planar parametric curves use t from 0 to 2π; 3D space curves use t from 0 to 4π.</p>
             <p>Use the <strong>a</strong> slider to explore how a parameter changes a graph. Drag the canvas to pan or rotate, and scroll to zoom.</p>
+            <p>Define a variable in any expression row, such as <code>b = 2a</code>, then use it in another row, such as <code>y = b sin(x)</code>. Variables can depend on each other; circular definitions show an error.</p>
             <p>In 2D, click a function to trace its coordinates and approximate slope. Use the <strong>ƒ′</strong> button to mark roots, turning points, and intersections of visible <code>y =</code> functions.</p>
             <p>Your current project saves in this browser automatically. Use <strong>Save project</strong> to keep a file you can reopen later.</p>
             <p>Use <strong>Undo</strong> and <strong>Redo</strong> in the toolbar, or press <code>⌘Z</code> and <code>⌘⇧Z</code>, to revisit edits from this session.</p>

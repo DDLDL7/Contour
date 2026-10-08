@@ -67,10 +67,11 @@ function validate(node: MathNode, symbols: ReadonlySet<string>, defaultVariable:
 
 interface CompiledFormula {
   inferredFunctions: string[]
+  symbols: string[]
   evaluate: (scope: Record<string, number>) => number
 }
 
-function compileFormula(source: string, variables: string[], defaultVariable: string): CompiledFormula {
+function compileFormula(source: string, variables: string[], defaultVariable: string, inferFunctions = true): CompiledFormula {
   if (!source.trim()) throw new Error('Finish the expression before graphing it.')
   // MathLive emits `sin x` for a function applied to a single symbol.
   const normalized = source.replace(
@@ -86,6 +87,7 @@ function compileFormula(source: string, variables: string[], defaultVariable: st
 
   const inferredFunctions = new Set<string>()
   tree = tree.transform((node, _path, parent) => {
+    if (!inferFunctions) return node
     if (node.type !== 'SymbolNode' || parent?.type === 'FunctionNode') return node
     const name = (node as SymbolNode).name
     if (!unaryFunctions.has(name)) return node
@@ -93,9 +95,15 @@ function compileFormula(source: string, variables: string[], defaultVariable: st
     return new FunctionNode(new SymbolNode(name), [new SymbolNode(defaultVariable)])
   })
   validate(tree, new Set([...variables, 'a', 'pi', 'e']), defaultVariable)
+  const symbols = new Set<string>()
+  tree.traverse((node, _path, parent) => {
+    if (node.type !== 'SymbolNode' || (parent?.type === 'FunctionNode' && (parent as FunctionNode).fn === node)) return
+    symbols.add((node as SymbolNode).name)
+  })
   const compiled = tree.compile()
   return {
     inferredFunctions: [...inferredFunctions],
+    symbols: [...symbols],
     evaluate: (scope) => {
       try {
         const value: unknown = compiled.evaluate(scope)
@@ -104,6 +112,19 @@ function compileFormula(source: string, variables: string[], defaultVariable: st
         return Number.NaN
       }
     },
+  }
+}
+
+export interface ScalarDefinition {
+  dependencies: string[]
+  evaluate: (scope: Record<string, number>) => number
+}
+
+export function compileScalarDefinition(source: string, names: string[]): ScalarDefinition {
+  const formula = compileFormula(source, names, 'a', false)
+  return {
+    dependencies: formula.symbols.filter((name) => names.includes(name)),
+    evaluate: formula.evaluate,
   }
 }
 
@@ -143,37 +164,38 @@ function splitTopLevelRelation(input: string): { left: string; right: string; op
   return found
 }
 
-export function compileGraph(input: string): GraphExpression {
+export function compileGraph(input: string, definitions: Readonly<Record<string, number>> = {}): GraphExpression {
   const trimmed = input.trim()
   if (!trimmed) throw new Error('Enter an expression to graph.')
+  const names = Object.keys(definitions)
 
   const parts = splitTopLevelParts(trimmed)
   if ((parts.length === 2 || parts.length === 3) && /^x\s*=/i.test(parts[0]) && /^y\s*=/i.test(parts[1]) && (parts.length === 2 || /^z\s*=/i.test(parts[2]))) {
     const xSource = parts[0].replace(/^x\s*=/i, '').trim()
     const ySource = parts[1].replace(/^y\s*=/i, '').trim()
-    const xFormula = compileFormula(xSource, ['t'], 't')
-    const yFormula = compileFormula(ySource, ['t'], 't')
-    const zFormula = parts.length === 3 ? compileFormula(parts[2].replace(/^z\s*=/i, '').trim(), ['t'], 't') : null
+    const xFormula = compileFormula(xSource, ['t', ...names], 't')
+    const yFormula = compileFormula(ySource, ['t', ...names], 't')
+    const zFormula = parts.length === 3 ? compileFormula(parts[2].replace(/^z\s*=/i, '').trim(), ['t', ...names], 't') : null
     return {
       kind: zFormula ? 'spaceCurve' : 'parametric',
       label: trimmed,
       inferredFunctions: [...new Set([...xFormula.inferredFunctions, ...yFormula.inferredFunctions, ...(zFormula?.inferredFunctions ?? [])])],
-      evaluate: (t, _y, a) => xFormula.evaluate({ t, a }),
-      evaluateY: (t, _y, a) => yFormula.evaluate({ t, a }),
-      evaluateZ: zFormula ? (t, _y, a) => zFormula.evaluate({ t, a }) : undefined,
+      evaluate: (t, _y, a) => xFormula.evaluate({ ...definitions, t, a }),
+      evaluateY: (t, _y, a) => yFormula.evaluate({ ...definitions, t, a }),
+      evaluateZ: zFormula ? (t, _y, a) => zFormula.evaluate({ ...definitions, t, a }) : undefined,
     }
   }
 
   const relation = splitTopLevelRelation(trimmed)
   if (relation && !(relation.operator === '=' && /^[xyzr]$/i.test(relation.left))) {
-    const left = compileFormula(relation.left, ['x', 'y'], 'x')
-    const right = compileFormula(relation.right, ['x', 'y'], 'x')
+    const left = compileFormula(relation.left, ['x', 'y', ...names], 'x')
+    const right = compileFormula(relation.right, ['x', 'y', ...names], 'x')
     return {
       kind: relation.operator === '=' ? 'implicit' : 'inequality',
       label: trimmed,
       relation: relation.operator,
       inferredFunctions: [...new Set([...left.inferredFunctions, ...right.inferredFunctions])],
-      evaluate: (x, y, a) => left.evaluate({ x, y, a }) - right.evaluate({ x, y, a }),
+      evaluate: (x, y, a) => left.evaluate({ ...definitions, x, y, a }) - right.evaluate({ ...definitions, x, y, a }),
     }
   }
 
@@ -182,13 +204,13 @@ export function compileGraph(input: string): GraphExpression {
   const kind: GraphKind = target === 'z' ? 'surface' : target === 'x' ? 'vertical' : target === 'r' ? 'polar' : 'curve'
   const variables = kind === 'surface' ? ['x', 'y'] : kind === 'curve' ? ['x'] : kind === 'polar' ? ['theta'] : []
   const defaultVariable = kind === 'polar' ? 'theta' : 'x'
-  const formula = compileFormula(source, variables, defaultVariable)
+  const formula = compileFormula(source, [...variables, ...names], defaultVariable)
 
   return {
     kind,
     label: `${target} = ${source}`,
     inferredFunctions: formula.inferredFunctions,
-    evaluate: (x, y, a) => formula.evaluate(kind === 'polar' ? { theta: x, a } : { x, y, a }),
+    evaluate: (x, y, a) => formula.evaluate(kind === 'polar' ? { ...definitions, theta: x, a } : { ...definitions, x, y, a }),
   }
 }
 
