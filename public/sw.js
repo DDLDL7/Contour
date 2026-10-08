@@ -1,4 +1,4 @@
-const CACHE = 'contour-static-v2'
+const CACHE = 'contour-static-v3'
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -33,6 +33,23 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return
+  if (event.request.mode === 'navigate') {
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(event.request)
+        if (response.ok) {
+          const cache = await caches.open(CACHE)
+          await cache.put(event.request, response.clone())
+        }
+        return response
+      } catch {
+        return (await caches.match(event.request))
+          || (await caches.match(new URL('./', self.location.href)))
+          || Response.error()
+      }
+    })())
+    return
+  }
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
       if (response.ok) {

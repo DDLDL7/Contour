@@ -1,6 +1,6 @@
 # Graphing Calculator — Detailed Execution Plan
 
-Status: Implementation underway. The web and macOS workspace now supports explicit 2D and 3D graphs, live maths input, polar and parametric curves, implicit 2D curves, and shaded inequalities; the full roadmap remains in progress.
+Status: Implementation underway. The web and macOS workspace now supports explicit 2D and 3D graphs, parametric 3D space curves, live maths input, polar and parametric 2D curves, implicit 2D curves, shaded inequalities, and initial 2D graph analysis; the full roadmap remains in progress.
 
 Prepared: 7 October 2026.
 
@@ -255,4 +255,4 @@ For mobile, preserve reusable maths engines, project formats, and synchronisatio
 
 A real web-and-Mac calculator that saves locally, plots reliable 2D graphs, displays interactive 3D surfaces, and runs its core calculations offline. It will establish the foundation on which the full roadmap can be built and tested.
 
-Current progress: the web and macOS apps support editable 2D functions, polar and parametric curves, implicit 2D equations, shaded inequalities, explicit 3D surfaces, a parameter slider, local autosave, project import/export, and graph image export. The production web build includes a service worker. Both graph views were checked in the packaged Mac app, and a project file was exported there. Advanced 3D graphs, symbolic maths, accounts, collaboration, notebooks, and optional local AI remain on the roadmap.
+Current progress: the web and macOS apps support editable 2D functions, polar and parametric curves, implicit 2D equations, shaded inequalities, explicit 3D surfaces, parametric 3D space curves, a parameter slider, local autosave, project import/export, and graph image export. Explicit 2D functions now have click-to-trace, estimated tangent slopes, and approximate roots, turning points, and intersections within the visible view. The production web build includes a service worker. Both graph views were checked in the packaged Mac app, and a project file was exported there. Advanced 3D surfaces, symbolic maths, accounts, collaboration, notebooks, and optional local AI remain on the roadmap.

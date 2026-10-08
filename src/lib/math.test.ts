@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { convertAsciiMathToLatex, convertLatexToAsciiMath } from 'mathlive/ssr'
 import { editorAsciiToGraphSyntax } from './equation'
-import { compileGraph, evaluatePlanarPoint } from './math'
+import { compileGraph, evaluatePlanarPoint, evaluateSpatialPoint } from './math'
 
 describe('graph expression compilation', () => {
   it('evaluates a parameterised 2D function', () => {
@@ -81,6 +81,20 @@ describe('graph expression compilation', () => {
     expect(nestedComma.evaluate(3, 0, 0)).toBe(2)
     expect(() => compileGraph('x = cos(x), y = sin(t)')).toThrow('Unknown symbol')
     expect(() => compileGraph('x = cos(t), y =')).toThrow('Finish the expression')
+  })
+
+  it('compiles a three-dimensional parametric space curve', () => {
+    const source = convertLatexToAsciiMath(String.raw`x=2a\cos(t),y=2a\sin(t),z=t/2`)
+    const helix = compileGraph(editorAsciiToGraphSyntax(source))
+    const nestedComma = compileGraph('x = min(2, t), y = sin(t), z = t/2')
+
+    expect(helix.kind).toBe('spaceCurve')
+    const [x, y, z] = evaluateSpatialPoint(helix, Math.PI / 2, 1.5)
+    expect(x).toBeCloseTo(0)
+    expect(y).toBeCloseTo(3)
+    expect(z).toBeCloseTo(Math.PI / 4)
+    expect(evaluateSpatialPoint(nestedComma, 3, 0)[0]).toBe(2)
+    expect(() => compileGraph('x=cos(t), y=sin(t), z=unknown')).toThrow('Unknown symbol')
   })
 
   it('compiles implicit equations and inequalities from math notation', () => {

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { estimateSlope, findCurveExtrema, findCurveIntersections, findCurveRoots } from '../lib/analysis'
 import { contourSegments, sampleScalarGrid, type ScalarGrid } from '../lib/contours'
 import { evaluatePlanarPoint, formatNumber, type PlottableGraph } from '../lib/math'
 
@@ -12,6 +13,15 @@ interface Props {
   graphs: PlottableGraph[]
   parameterA: number
   canvasRef: RefObject<HTMLCanvasElement | null>
+}
+
+interface AnalysisFeature {
+  kind: 'root' | 'minimum' | 'maximum' | 'intersection'
+  x: number
+  y: number
+  graphId: string
+  color: string
+  label: string
 }
 
 const initialViewport: Viewport = { centerX: 0, centerY: 0, scale: 52 }
@@ -72,6 +82,44 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewport, setViewport] = useState(initialViewport)
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
+  const [analysisOpen, setAnalysisOpen] = useState(false)
+  const [trace, setTrace] = useState<{ graphId: string; x: number } | null>(null)
+
+  const analysis = useMemo(() => {
+    if (!analysisOpen || size.width === 0 || size.height === 0) return { features: [] as AnalysisFeature[], omittedGraphs: 0, curveCount: 0 }
+    const allCurves = graphs.filter((item) => item.visible && item.graph.kind === 'curve')
+    const curves = allCurves.slice(0, 8)
+    const minX = viewport.centerX - size.width / (2 * viewport.scale)
+    const maxX = viewport.centerX + size.width / (2 * viewport.scale)
+    const minY = viewport.centerY - size.height / (2 * viewport.scale)
+    const maxY = viewport.centerY + size.height / (2 * viewport.scale)
+    const features: AnalysisFeature[] = []
+    const add = (kind: AnalysisFeature['kind'], x: number, y: number, graphId: string, color: string, label: string) => {
+      if (Number.isFinite(y) && y >= minY && y <= maxY && features.length < 200) {
+        features.push({ kind, x, y, graphId, color, label })
+      }
+    }
+
+    curves.forEach((item, index) => {
+      const label = `Graph ${graphs.indexOf(item) + 1}`
+      for (const point of findCurveRoots(item.graph, parameterA, minX, maxX)) {
+        add('root', point.x, point.y, item.id, item.color, label)
+      }
+      for (const point of findCurveExtrema(item.graph, parameterA, minX, maxX)) {
+        add(point.kind, point.x, point.y, item.id, item.color, label)
+      }
+      for (const other of curves.slice(index + 1)) {
+        for (const point of findCurveIntersections(item.graph, other.graph, parameterA, minX, maxX)) {
+          add('intersection', point.x, point.y, item.id, item.color, `${label} & ${graphs.indexOf(other) + 1}`)
+        }
+      }
+    })
+    return { features: features.sort((first, second) => first.x - second.x), omittedGraphs: allCurves.length - curves.length, curveCount: allCurves.length }
+  }, [analysisOpen, graphs, parameterA, size, viewport])
+
+  const tracedGraph = graphs.find((item) => item.id === trace?.graphId && item.visible && item.graph.kind === 'curve')
+  const tracedY = tracedGraph && trace ? tracedGraph.graph.evaluate(trace.x, 0, parameterA) : Number.NaN
+  const tracedSlope = tracedGraph && trace ? estimateSlope(tracedGraph.graph, parameterA, trace.x) : Number.NaN
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -158,7 +206,7 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     }
 
     for (const item of graphs) {
-      if (!item.visible || item.graph.kind === 'surface') continue
+      if (!item.visible || item.graph.kind === 'surface' || item.graph.kind === 'spaceCurve') continue
       ctx.strokeStyle = item.color
       ctx.lineWidth = 2.7
       ctx.lineCap = 'round'
@@ -225,7 +273,49 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
       ctx.stroke()
       ctx.setLineDash([])
     }
-  }, [canvasRef, graphs, parameterA, size, viewport])
+
+    for (const feature of analysis.features) {
+      const x = sx(feature.x)
+      const y = sy(feature.y)
+      if (x < 0 || x > width || y < 0 || y > height) continue
+      ctx.beginPath()
+      ctx.arc(x, y, feature.kind === 'intersection' ? 5.5 : 4.5, 0, Math.PI * 2)
+      ctx.fillStyle = '#ffffff'
+      ctx.fill()
+      ctx.lineWidth = 2.4
+      ctx.strokeStyle = feature.color
+      ctx.stroke()
+    }
+
+    if (trace && tracedGraph && Number.isFinite(tracedY)) {
+      const x = sx(trace.x)
+      const y = sy(tracedY)
+      if (x >= 0 && x <= width && y >= 0 && y <= height) {
+        ctx.save()
+        ctx.strokeStyle = tracedGraph.color
+        ctx.lineWidth = 1.3
+        ctx.setLineDash([5, 5])
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, height)
+        ctx.stroke()
+        if (Number.isFinite(tracedSlope)) {
+          ctx.beginPath()
+          ctx.moveTo(x - 90, y + tracedSlope * 90)
+          ctx.lineTo(x + 90, y - tracedSlope * 90)
+          ctx.stroke()
+        }
+        ctx.setLineDash([])
+        ctx.beginPath()
+        ctx.arc(x, y, 6, 0, Math.PI * 2)
+        ctx.fillStyle = '#ffffff'
+        ctx.fill()
+        ctx.lineWidth = 3
+        ctx.stroke()
+        ctx.restore()
+      }
+    }
+  }, [analysis.features, canvasRef, graphs, parameterA, size, trace, tracedGraph, tracedSlope, tracedY, viewport])
 
   function updateCursor(clientX: number, clientY: number) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -236,12 +326,29 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     })
   }
 
+  function selectTrace(clientX: number, clientY: number) {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const x = viewport.centerX + (clientX - rect.left - rect.width / 2) / viewport.scale
+    const pointerY = clientY - rect.top
+    let nearest: { graphId: string; distance: number } | null = null
+    for (const item of graphs) {
+      if (!item.visible || item.graph.kind !== 'curve') continue
+      const y = item.graph.evaluate(x, 0, parameterA)
+      if (!Number.isFinite(y)) continue
+      const pixelY = rect.height / 2 - (y - viewport.centerY) * viewport.scale
+      const distance = Math.abs(pixelY - pointerY)
+      if (!nearest || distance < nearest.distance) nearest = { graphId: item.id, distance }
+    }
+    setTrace(nearest && nearest.distance <= 22 ? { graphId: nearest.graphId, x } : null)
+  }
+
   return (
     <div className="graph-stage" ref={containerRef}>
       <canvas
         ref={canvasRef}
         className="graph-canvas"
-        aria-label="Interactive two-dimensional graph. Drag to pan and scroll to zoom."
+        aria-label="Interactive two-dimensional graph. Drag to pan, scroll to zoom, or click a function to trace it."
         role="img"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId)
@@ -257,7 +364,13 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
             centerY: drag.viewport.centerY + (event.clientY - drag.y) / drag.viewport.scale,
           })
         }}
-        onPointerUp={() => { dragRef.current = null }}
+        onPointerUp={(event) => {
+          const drag = dragRef.current
+          if (drag && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) {
+            selectTrace(event.clientX, event.clientY)
+          }
+          dragRef.current = null
+        }}
         onPointerCancel={() => { dragRef.current = null }}
         onPointerLeave={() => setCursor(null)}
         onWheel={(event) => {
@@ -280,9 +393,36 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
         <button type="button" onClick={() => setViewport((current) => ({ ...current, scale: Math.min(maxScale, current.scale * buttonZoomFactor) }))} aria-label="Zoom in">+</button>
         <button type="button" onClick={() => setViewport((current) => ({ ...current, scale: Math.max(minScale, current.scale / buttonZoomFactor) }))} aria-label="Zoom out">−</button>
         <button type="button" onClick={() => setViewport(initialViewport)} aria-label="Reset view" className="reset-view">⌖</button>
+        <button type="button" onClick={() => setAnalysisOpen((current) => !current)} aria-label={analysisOpen ? 'Hide graph analysis' : 'Analyze graph'} aria-pressed={analysisOpen} className={`analysis-toggle ${analysisOpen ? 'active' : ''}`}>ƒ′</button>
       </div>
+      {analysisOpen && (
+        <div className="analysis-panel" role="region" aria-label="Approximate graph analysis">
+          <div className="analysis-heading"><strong>Graph analysis</strong><button type="button" onClick={() => setAnalysisOpen(false)} aria-label="Close graph analysis">×</button></div>
+          <p>Approximate points for visible y = functions. Select one to trace it.</p>
+          {analysis.omittedGraphs > 0 && <p>Showing the first 8 visible 2D functions.</p>}
+          {analysis.features.length === 0 ? <div className="analysis-empty">{analysis.curveCount === 0 ? 'Add a visible y = function to analyze.' : 'No roots, turning points, or intersections found here.'}</div> : (
+            <div className="analysis-results">
+              {analysis.features.slice(0, 18).map((feature, index) => (
+                <button key={`${feature.kind}-${feature.graphId}-${index}`} type="button" onClick={() => setTrace({ graphId: feature.graphId, x: feature.x })}>
+                  <span className="analysis-dot" style={{ backgroundColor: feature.color }} aria-hidden="true" />
+                  <span className="analysis-result-name">{feature.kind === 'root' ? 'Root' : feature.kind === 'minimum' ? 'Minimum' : feature.kind === 'maximum' ? 'Maximum' : 'Intersection'} <small>{feature.label}</small></span>
+                  <span className="analysis-coordinates">({formatNumber(feature.x, 2)}, {formatNumber(feature.y, 2)})</span>
+                </button>
+              ))}
+              {analysis.features.length > 18 && <div className="analysis-more">+{analysis.features.length - 18} more points in view</div>}
+            </div>
+          )}
+        </div>
+      )}
+      {trace && tracedGraph && Number.isFinite(tracedY) && (
+        <div className="trace-card" role="status">
+          <span className="trace-dot" style={{ backgroundColor: tracedGraph.color }} aria-hidden="true" />
+          <span>x {formatNumber(trace.x)} · y {formatNumber(tracedY)}{Number.isFinite(tracedSlope) ? ` · slope ${formatNumber(tracedSlope)}` : ''}</span>
+          <button type="button" onClick={() => setTrace(null)} aria-label="Clear trace">×</button>
+        </div>
+      )}
       <div className="coordinate-readout" aria-live="off">
-        {cursor ? `x ${formatNumber(cursor.x)}   y ${formatNumber(cursor.y)}` : 'Drag to pan · Scroll to zoom'}
+        {cursor ? `x ${formatNumber(cursor.x)}   y ${formatNumber(cursor.y)}` : 'Drag to pan · Scroll to zoom · Click a curve to trace'}
       </div>
     </div>
   )

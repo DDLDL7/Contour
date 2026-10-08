@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import type { PlottableGraph } from '../lib/math'
+import { evaluateSpatialPoint, type PlottableGraph } from '../lib/math'
 
 interface Props {
   graphs: PlottableGraph[]
@@ -73,6 +73,34 @@ function makeSurface(graph: PlottableGraph, parameterA: number, wireframe: boole
     wireframe,
   })
   return new THREE.Mesh(geometry, material)
+}
+
+function makeSpaceCurve(graph: PlottableGraph, parameterA: number): THREE.Mesh[] {
+  const meshes: THREE.Mesh[] = []
+  let points: THREE.Vector3[] = []
+  const material = new THREE.MeshStandardMaterial({ color: graph.color, roughness: 0.6 })
+  const finishRun = () => {
+    if (points.length >= 2) {
+      const path = new THREE.CatmullRomCurve3(points)
+      meshes.push(new THREE.Mesh(new THREE.TubeGeometry(path, Math.max(16, points.length * 2), 0.04, 6, false), material.clone()))
+    }
+    points = []
+  }
+
+  for (let index = 0; index <= 720; index += 1) {
+    const parameter = index / 720 * Math.PI * 4
+    const [x, y, z] = evaluateSpatialPoint(graph.graph, parameter, parameterA)
+    if (![x, y, z].every(Number.isFinite) || Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) > 30) {
+      finishRun()
+      continue
+    }
+    const point = new THREE.Vector3(x, z, y)
+    if (points.length > 0 && points[points.length - 1].distanceTo(point) > 2) finishRun()
+    points.push(point)
+  }
+  finishRun()
+  material.dispose()
+  return meshes
 }
 
 export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
@@ -157,9 +185,13 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
       ;(mesh.material as THREE.Material).dispose()
     }
     for (const graph of graphs) {
-      if (!graph.visible || graph.graph.kind !== 'surface') continue
-      const mesh = makeSurface(graph, parameterA, wireframe)
-      if (mesh) state.surfaces.add(mesh)
+      if (!graph.visible) continue
+      if (graph.graph.kind === 'surface') {
+        const mesh = makeSurface(graph, parameterA, wireframe)
+        if (mesh) state.surfaces.add(mesh)
+      } else if (graph.graph.kind === 'spaceCurve') {
+        state.surfaces.add(...makeSpaceCurve(graph, parameterA))
+      }
     }
     state.renderer.render(state.scene, state.camera)
   }, [graphs, parameterA, wireframe])

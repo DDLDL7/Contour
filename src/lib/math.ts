@@ -1,6 +1,6 @@
 import { FunctionNode, parse, SymbolNode, type MathNode } from 'mathjs'
 
-export type GraphKind = 'curve' | 'vertical' | 'surface' | 'polar' | 'parametric' | 'implicit' | 'inequality'
+export type GraphKind = 'curve' | 'vertical' | 'surface' | 'spaceCurve' | 'polar' | 'parametric' | 'implicit' | 'inequality'
 export type RelationOperator = '=' | '<' | '<=' | '>' | '>='
 
 export interface GraphExpression {
@@ -10,6 +10,7 @@ export interface GraphExpression {
   relation?: RelationOperator
   evaluate: (x: number, y: number, a: number) => number
   evaluateY?: (t: number, y: number, a: number) => number
+  evaluateZ?: (t: number, y: number, a: number) => number
 }
 
 export interface PlottableGraph {
@@ -106,17 +107,21 @@ function compileFormula(source: string, variables: string[], defaultVariable: st
   }
 }
 
-function splitTopLevelPair(input: string): [string, string] | null {
+function splitTopLevelParts(input: string): string[] {
   let depth = 0
+  let start = 0
+  const parts: string[] = []
   for (let index = 0; index < input.length; index += 1) {
     const character = input[index]
     if (character === '(') depth += 1
     if (character === ')') depth -= 1
     if (depth === 0 && (character === ',' || character === ';')) {
-      return [input.slice(0, index).trim(), input.slice(index + 1).trim()]
+      parts.push(input.slice(start, index).trim())
+      start = index + 1
     }
   }
-  return null
+  parts.push(input.slice(start).trim())
+  return parts
 }
 
 function splitTopLevelRelation(input: string): { left: string; right: string; operator: RelationOperator } | null {
@@ -142,18 +147,20 @@ export function compileGraph(input: string): GraphExpression {
   const trimmed = input.trim()
   if (!trimmed) throw new Error('Enter an expression to graph.')
 
-  const pair = splitTopLevelPair(trimmed)
-  if (pair && /^x\s*=/i.test(pair[0]) && /^y\s*=/i.test(pair[1])) {
-    const xSource = pair[0].replace(/^x\s*=/i, '').trim()
-    const ySource = pair[1].replace(/^y\s*=/i, '').trim()
+  const parts = splitTopLevelParts(trimmed)
+  if ((parts.length === 2 || parts.length === 3) && /^x\s*=/i.test(parts[0]) && /^y\s*=/i.test(parts[1]) && (parts.length === 2 || /^z\s*=/i.test(parts[2]))) {
+    const xSource = parts[0].replace(/^x\s*=/i, '').trim()
+    const ySource = parts[1].replace(/^y\s*=/i, '').trim()
     const xFormula = compileFormula(xSource, ['t'], 't')
     const yFormula = compileFormula(ySource, ['t'], 't')
+    const zFormula = parts.length === 3 ? compileFormula(parts[2].replace(/^z\s*=/i, '').trim(), ['t'], 't') : null
     return {
-      kind: 'parametric',
+      kind: zFormula ? 'spaceCurve' : 'parametric',
       label: trimmed,
-      inferredFunctions: [...new Set([...xFormula.inferredFunctions, ...yFormula.inferredFunctions])],
+      inferredFunctions: [...new Set([...xFormula.inferredFunctions, ...yFormula.inferredFunctions, ...(zFormula?.inferredFunctions ?? [])])],
       evaluate: (t, _y, a) => xFormula.evaluate({ t, a }),
       evaluateY: (t, _y, a) => yFormula.evaluate({ t, a }),
+      evaluateZ: zFormula ? (t, _y, a) => zFormula.evaluate({ t, a }) : undefined,
     }
   }
 
@@ -194,6 +201,15 @@ export function evaluatePlanarPoint(graph: GraphExpression, parameter: number, a
     return [first, graph.evaluateY?.(parameter, 0, a) ?? Number.NaN]
   }
   return [Number.NaN, Number.NaN]
+}
+
+export function evaluateSpatialPoint(graph: GraphExpression, parameter: number, a: number): [number, number, number] {
+  if (graph.kind !== 'spaceCurve') return [Number.NaN, Number.NaN, Number.NaN]
+  return [
+    graph.evaluate(parameter, 0, a),
+    graph.evaluateY?.(parameter, 0, a) ?? Number.NaN,
+    graph.evaluateZ?.(parameter, 0, a) ?? Number.NaN,
+  ]
 }
 
 export function formatNumber(value: number, digits = 3): string {

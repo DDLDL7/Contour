@@ -5,7 +5,8 @@ Contour is an offline-capable graphing calculator for students, built for the we
 ## What works today
 
 - Plot explicit 2D functions, vertical lines, polar and parametric curves, implicit equations, and shaded inequalities.
-- Explore explicit 3D surfaces with rotation and zoom controls.
+- Explore explicit 3D surfaces and parametric space curves with rotation and zoom controls.
+- Trace 2D functions and inspect approximate roots, turning points, intersections, and tangent slopes in the visible view.
 - Edit expressions in mathematical notation, and vary the parameter `a` with a slider.
 - Save work automatically on the device, export and import project files, and export graph images.
 - Use the packaged macOS app offline. The production web app caches its assets after an initial visit for later offline use.
@@ -40,6 +41,7 @@ Expressions are editable in live maths notation. Type `/` for a stacked fraction
 - `y = 3sin + 5` graphs as `y = 3sin(x) + 5`; the expression row shows when `x` was inferred.
 - `x = 2` for a vertical 2D line.
 - `z = sin(sqrt(x^2 + y^2))` for an explicit 3D surface.
+- `x = 2a*cos(t), y = 2a*sin(t), z = t/2` for a 3D helix, with t from 0 to 4π.
 - `r = 2*sin(3*theta)` for a polar rose, with θ from 0 to 2π radians.
 - `x = 3*cos(t), y = 3*sin(t)` for a parametric circle, with t from 0 to 2π.
 - `x^2 + y^2 = 9` for an implicit circle.
@@ -48,11 +50,13 @@ Expressions are editable in live maths notation. Type `/` for a stacked fraction
 
 Drag the 2D graph to pan, or the 3D graph to rotate. Scroll to zoom. Move the `a` slider to update any expression that uses it. Projects autosave in the current browser or app installation; **Save project** downloads a portable JSON copy, and **Open** imports one.
 
+On the 2D graph, click near a `y =` function to trace its coordinates and estimated slope. Select **ƒ′** to mark approximate roots, minima, maxima, and intersections of visible `y =` functions. The analysis is numerical, limited to the current view, and may miss features closer together than its sampling resolution.
+
 The 2D zoom now extends well beyond ±30 on both axes. Use the crosshair button to reset a graph that has been panned away from its origin.
 
 ## Scope of this version
 
-This version does not yet solve equations symbolically, draw parametric or implicit 3D surfaces, support custom parameter ranges or additional sliders, or sync projects between devices. Implicit curves and inequality boundaries are sampled over the visible viewport, so features smaller than the sampling grid may be missed. Local autosave is stored in browser storage, so export a project file for a durable backup.
+This version does not yet solve equations symbolically, draw parametric or implicit 3D surfaces, support custom parameter ranges or additional sliders, or sync projects between devices. Implicit curves and inequality boundaries are sampled over the visible viewport, so features smaller than the sampling grid may be missed. Graph analysis currently covers explicit 2D functions only. Local autosave is stored in browser storage, so export a project file for a durable backup.
 
 ## Verify
 

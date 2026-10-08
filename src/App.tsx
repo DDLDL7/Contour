@@ -20,12 +20,13 @@ interface CompiledRow {
 
 function describeGraph(graph: NonNullable<CompiledRow['graph']>): string {
   const kind = graph.kind === 'surface' ? '3D surface'
+    : graph.kind === 'spaceCurve' ? '3D space curve'
     : graph.kind === 'vertical' ? 'Vertical line'
       : graph.kind === 'polar' ? 'Polar curve'
         : graph.kind === 'parametric' ? 'Parametric curve'
           : graph.kind === 'implicit' ? 'Implicit curve'
             : graph.kind === 'inequality' ? 'Shaded region' : '2D curve'
-  const variable = graph.kind === 'polar' ? 'θ' : graph.kind === 'parametric' ? 't' : 'x'
+  const variable = graph.kind === 'polar' ? 'θ' : graph.kind === 'parametric' || graph.kind === 'spaceCurve' ? 't' : 'x'
   const inference = graph.inferredFunctions.map((name) => `${name} means ${name}(${variable})`).join(', ')
   return inference ? `${kind} · ${inference}` : kind
 }
@@ -55,7 +56,9 @@ function App() {
     graph: row.graph,
   }] : []), [compiledRows])
 
-  const activeCount = graphs.filter((item) => item.visible && (view === '2d' ? item.graph.kind !== 'surface' : item.graph.kind === 'surface')).length
+  const activeCount = graphs.filter((item) => item.visible && (view === '2d'
+    ? item.graph.kind !== 'surface' && item.graph.kind !== 'spaceCurve'
+    : item.graph.kind === 'surface' || item.graph.kind === 'spaceCurve')).length
 
   useEffect(() => {
     setSaveStatus('Saving…')
@@ -107,8 +110,8 @@ function App() {
     window.setTimeout(() => document.querySelector<HTMLElement>(`[data-expression-id="${id}"]`)?.focus(), 0)
   }
 
-  function addExample(text: string) {
-    setView('2d')
+  function addExample(text: string, nextView: View = '2d') {
+    setView(nextView)
     setProject((current) => ({
       ...current,
       expressions: [...current.expressions, {
@@ -224,6 +227,7 @@ function App() {
             <button type="button" onClick={() => addExample('x = 3*cos(t), y = 3*sin(t)')}>Parametric circle</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 = 9')}>Implicit circle</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 <= 9')}>Shaded disk</button>
+            <button type="button" onClick={() => addExample('x = 2a*cos(t), y = 2a*sin(t), z = t/2', '3d')}>3D helix</button>
           </div>
 
           <div className="parameter-panel">
@@ -267,7 +271,7 @@ function App() {
               <div className="graph-empty" role="status">
                 <div className="graph-empty-icon">{view === '2d' ? <ChartNoAxesCombined size={24} /> : <Box size={24} />}</div>
                 <strong>No {view.toUpperCase()} graph yet</strong>
-                <p>{view === '2d' ? 'Add an expression in the left panel.' : 'Add a z = expression in the left panel.'}</p>
+                <p>{view === '2d' ? 'Add an expression in the left panel.' : 'Add a z = surface or x, y, z curve in the left panel.'}</p>
                 <button type="button" onClick={addExpression}><Plus size={15} /> Add expression</button>
               </div>
             )}
@@ -288,12 +292,14 @@ function App() {
             <p>If you leave out a function’s argument, Contour uses <code>x</code>: <code>y = 3sin + 5</code> graphs as <code>y = 3sin(x) + 5</code>.</p>
             <div className="help-example"><span>For 2D</span><code>y = a*sin(x)</code></div>
             <div className="help-example"><span>For 3D</span><code>z = sin(sqrt(x^2 + y^2))</code></div>
+            <div className="help-example"><span>3D curve</span><code>x = 2a cos(t), y = 2a sin(t), z = t/2</code></div>
             <div className="help-example"><span>Polar</span><code>r = 2sin(3θ)</code></div>
             <div className="help-example"><span>Parametric</span><code>x = 3cos(t), y = 3sin(t)</code></div>
             <div className="help-example"><span>Implicit</span><code>x^2 + y^2 = 9</code></div>
             <div className="help-example"><span>Inequality</span><code>x^2 + y^2 ≤ 9</code></div>
-            <p>Polar curves use θ from 0 to 2π radians. Parametric curves use t over the same interval.</p>
+            <p>Polar curves use θ from 0 to 2π radians. Planar parametric curves use t from 0 to 2π; 3D space curves use t from 0 to 4π.</p>
             <p>Use the <strong>a</strong> slider to explore how a parameter changes a graph. Drag the canvas to pan or rotate, and scroll to zoom.</p>
+            <p>In 2D, click a function to trace its coordinates and approximate slope. Use the <strong>ƒ′</strong> button to mark roots, turning points, and intersections of visible <code>y =</code> functions.</p>
             <p>Your current project saves in this browser automatically. Use <strong>Save project</strong> to keep a file you can reopen later.</p>
             <button className="help-done" type="button" onClick={() => setHelpOpen(false)}>Got it</button>
           </section>
