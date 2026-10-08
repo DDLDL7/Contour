@@ -8,6 +8,7 @@ Contour is an offline-capable graphing calculator for students, built for the we
 - Explore explicit 3D surfaces and parametric space curves with rotation and zoom controls.
 - Trace 2D functions and inspect approximate roots, turning points, intersections, and tangent slopes in the visible view.
 - Edit expressions in mathematical notation, and vary the parameter `a` with a slider.
+- Undo and redo project edits, including equation typing, title changes, slider moves, and adding or removing expressions.
 - Save work automatically on the device, export and import project files, and export graph images.
 - Use the packaged macOS app offline. The production web app caches its assets after an initial visit for later offline use.
 
@@ -49,6 +50,8 @@ Expressions are editable in live maths notation. Type `/` for a stacked fraction
 - Supported functions include trigonometry, roots, logarithms, absolute value, rounding, minimum, and maximum.
 
 Drag the 2D graph to pan, or the 3D graph to rotate. Scroll to zoom. Move the `a` slider to update any expression that uses it. Projects autosave in the current browser or app installation; **Save project** downloads a portable JSON copy, and **Open** imports one.
+
+Use the toolbar buttons or `⌘Z` / `⌘⇧Z` on macOS to undo and redo. On Windows and Linux, use `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y`. Consecutive typing and slider changes are grouped into undo steps. History lasts for the current app session; export a project file to keep a durable copy.
 
 On the 2D graph, click near a `y =` function to trace its coordinates and estimated slope. Select **ƒ′** to mark approximate roots, minima, maxima, and intersections of visible `y =` functions. The analysis is numerical, limited to the current view, and may miss features closer together than its sampling resolution.
 

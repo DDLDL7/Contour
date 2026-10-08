@@ -80,6 +80,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
   flex: 0 0 auto;
 }
 .icon-button:hover { background: #edf3f8; color: #1c527c; }
+.icon-button:disabled { cursor: default; opacity: .38; }
+.icon-button:disabled:hover { background: transparent; color: #61778a; }
 .header-icon { margin-right: 3px; }
 .header-button {
   justify-content: center;

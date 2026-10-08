@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { Box, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Plus, Redo2, RotateCcw, Trash2, Undo2, Upload } from 'lucide-react'
 import { Graph2D } from './components/Graph2D'
 import { Graph3D } from './components/Graph3D'
 import { EquationField } from './components/EquationField'
 import { compileGraph, formatNumber, type PlottableGraph } from './lib/math'
+import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
 
 type View = '2d' | '3d'
@@ -32,13 +33,24 @@ function describeGraph(graph: NonNullable<CompiledRow['graph']>): string {
 }
 
 function App() {
-  const [project, setProject] = useState<Project>(loadProject)
+  const [history, setHistory] = useState(() => createHistory(loadProject()))
+  const project = history.present
   const [view, setView] = useState<View>('2d')
   const [saveStatus, setSaveStatus] = useState('Saved on this device')
   const [message, setMessage] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  function setProject(update: Project | ((current: Project) => Project), group: string | null = null) {
+    const now = Date.now()
+    setHistory((current) => recordHistory(
+      current,
+      typeof update === 'function' ? update(current.present) : update,
+      group,
+      now,
+    ))
+  }
 
   const compiledRows = useMemo<CompiledRow[]>(() => project.expressions.map((row) => {
     if (!row.text.trim()) return { ...row }
@@ -75,6 +87,16 @@ function App() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        setHistory((current) => event.shiftKey ? redoHistory(current) : undoHistory(current))
+        return
+      }
+      if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'y') {
+        event.preventDefault()
+        setHistory(redoHistory)
+        return
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
         downloadProject(project)
@@ -85,15 +107,19 @@ function App() {
         fileInputRef.current?.click()
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [project])
 
   function updateRow(id: string, changes: Partial<Project['expressions'][number]>) {
-    setProject((current) => ({
-      ...current,
-      expressions: current.expressions.map((row) => row.id === id ? { ...row, ...changes } : row),
-    }))
+    setProject((current) => {
+      const row = current.expressions.find((item) => item.id === id)
+      if (!row || Object.entries(changes).every(([key, value]) => row[key as keyof typeof row] === value)) return current
+      return {
+        ...current,
+        expressions: current.expressions.map((item) => item.id === id ? { ...item, ...changes } : item),
+      }
+    }, changes.text !== undefined || changes.latex !== undefined ? `expression:${id}` : null)
   }
 
   function addExpression() {
@@ -112,10 +138,11 @@ function App() {
 
   function addExample(text: string, nextView: View = '2d') {
     setView(nextView)
+    const id = crypto.randomUUID()
     setProject((current) => ({
       ...current,
       expressions: [...current.expressions, {
-        id: crypto.randomUUID(),
+        id,
         text,
         color: graphColors[current.expressions.length % graphColors.length],
         visible: true,
@@ -161,6 +188,8 @@ function App() {
         </div>
 
         <div className="header-actions">
+          <button className="icon-button header-icon" type="button" onClick={() => setHistory(undoHistory)} aria-label="Undo" title="Undo (⌘Z)" disabled={history.past.length === 0}><Undo2 size={18} /></button>
+          <button className="icon-button header-icon" type="button" onClick={() => setHistory(redoHistory)} aria-label="Redo" title="Redo (⌘⇧Z)" disabled={history.future.length === 0}><Redo2 size={18} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => setHelpOpen(true)} aria-label="Help" title="Help"><HelpCircle size={18} /></button>
           <button className="header-button" type="button" onClick={() => fileInputRef.current?.click()}><Upload size={16} /><span>Open</span></button>
           <button className="header-button primary-action" type="button" onClick={() => downloadProject(project)}><Download size={16} /><span>Save project</span></button>
@@ -176,7 +205,7 @@ function App() {
               aria-label="Project title"
               value={project.title}
               maxLength={80}
-              onChange={(event) => setProject((current) => ({ ...current, title: event.target.value }))}
+              onChange={(event) => setProject((current) => current.title === event.target.value ? current : { ...current, title: event.target.value }, 'project:title')}
             />
             <div className="save-status"><span className="status-dot" />{saveStatus}</div>
           </div>
@@ -241,7 +270,7 @@ function App() {
               max="5"
               step="0.1"
               value={project.parameterA}
-              onChange={(event) => setProject((current) => ({ ...current, parameterA: Number(event.target.value) }))}
+              onChange={(event) => setProject((current) => current.parameterA === Number(event.target.value) ? current : { ...current, parameterA: Number(event.target.value) }, 'parameter:a')}
             />
             <div className="slider-ends"><span>−5</span><span>5</span></div>
           </div>
@@ -301,6 +330,7 @@ function App() {
             <p>Use the <strong>a</strong> slider to explore how a parameter changes a graph. Drag the canvas to pan or rotate, and scroll to zoom.</p>
             <p>In 2D, click a function to trace its coordinates and approximate slope. Use the <strong>ƒ′</strong> button to mark roots, turning points, and intersections of visible <code>y =</code> functions.</p>
             <p>Your current project saves in this browser automatically. Use <strong>Save project</strong> to keep a file you can reopen later.</p>
+            <p>Use <strong>Undo</strong> and <strong>Redo</strong> in the toolbar, or press <code>⌘Z</code> and <code>⌘⇧Z</code>, to revisit edits from this session.</p>
             <button className="help-done" type="button" onClick={() => setHelpOpen(false)}>Got it</button>
           </section>
         </div>
