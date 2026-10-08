@@ -6,7 +6,7 @@ export interface SpreadsheetValue { raw: string; value: number | null; error?: s
 
 export const spreadsheetColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 export const spreadsheetRows = 18
-export const emptySpreadsheet = (): SpreadsheetData => ({ cells: { A1: 'x', B1: 'y', A2: '1', B2: '2', A3: '2', B3: '3', A4: '3', B4: '5', A5: '4', B5: '4' } })
+export const emptySpreadsheet = (): SpreadsheetData => ({ cells: {} })
 
 export function spreadsheetSheets(data: SpreadsheetData): SpreadsheetSheet[] {
   if (data.sheets?.length) return data.sheets

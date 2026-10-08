@@ -1,6 +1,6 @@
 # Contour
 
-Contour is an offline-capable graphing calculator for students, built for the web and macOS. It combines live mathematical notation, interactive 2D and 3D graphs, a parameter slider, and local project saving in one workspace. This is an early version; the broader product roadmap is in [GRAPHING_CALCULATOR_PLAN.md](GRAPHING_CALCULATOR_PLAN.md).
+Contour is an offline-capable graphing calculator for students, built for the web and macOS. It combines mathematical notation, interactive 2D and 3D graphs, geometry, a spreadsheet, maths tools, and local project saving. The broader product roadmap is in [GRAPHING_CALCULATOR_PLAN.md](GRAPHING_CALCULATOR_PLAN.md).
 
 ## What works today
 
@@ -8,12 +8,18 @@ Contour is an offline-capable graphing calculator for students, built for the we
 - Plot piecewise 2D functions and functions with a domain condition.
 - Explore explicit, parametric, and implicit 3D surfaces, plus parametric space curves, with rotation and zoom controls. Advanced surface meshing runs in a cancellable worker.
 - Trace 2D functions and inspect approximate roots, turning points, intersections, and tangent slopes in the visible view.
-- Edit expressions in mathematical notation, and vary the parameter `a` with a slider.
+- Edit expressions in mathematical notation, create parameter sliders with custom ranges and animation, and use them across graphs.
 - Define shared variables such as `b = 2a` and reuse them in 2D or 3D graphs; circular definitions show an error.
+- Construct and transform linked 2D geometry, including points, paths, polygons, circles, ellipses, measurements, and selected loci and envelopes.
+- Enter formulas on multiple spreadsheet sheets; link active-sheet cells to graphs, chart data, run regressions and supported statistical tests.
+- Explore supported 3D solids, vector fields, surface intersections, cross-sections, and printable nets.
+- Add offline notebook notes with inline LaTeX and live variables, calculation cells, graph-visibility checkboxes, and numeric input boxes for parameters.
 - Undo and redo project edits, including equation typing, title changes, slider moves, and adding or removing expressions.
 - Save work automatically on the device, export and import project files, and export graph images.
-- Use Maths tools for calculations, basic symbolic algebra and differentiation, numerical calculus, matrix determinant and inverse, statistics, linear regression, and an initial-value ODE estimate.
+- Use Maths tools for calculations, supported symbolic algebra and calculus, bounded numerical solving, matrix operations, statistics, regression, and an initial-value ODE estimate. Results display in mathematical notation where supported.
 - Use the packaged macOS app offline. The production web app caches its assets after an initial visit for later offline use.
+
+New installations and **New project** open a blank workspace. Example equations are available only when selected. Projects previously autosaved with the untouched original sample equations are migrated to a blank workspace; edited projects are preserved. Browser and desktop autosaves are local to that installation.
 
 ## Run the web app
 
@@ -65,11 +71,11 @@ On the 2D graph, click near a `y =` function to trace its coordinates and estima
 
 The 2D zoom now extends well beyond ±30 on both axes. Use the crosshair button to reset a graph that has been panned away from its origin.
 
-The **Maths tools** tab accepts expressions in mathematical notation and can use valid workspace variables. Solve supports linear and quadratic equations in `x`; matrix operations accept square 2×2 to 4×4 arrays entered as rows separated by semicolons; statistics accepts comma-separated numbers; regression accepts `x,y` pairs separated by semicolons. Integrals use a fixed 512-interval Simpson approximation, limits use nearby numerical samples, and the ODE tool uses a 500-step fourth-order Runge–Kutta estimate. Tool results are temporary and are not saved in the project yet.
+The **Maths tools** tab accepts expressions in mathematical notation and can use valid workspace variables. Symbolic commands cover a supported subset; higher-degree and non-polynomial root search is numerical over a chosen interval. Matrix operations accept rectangular arrays where applicable; statistics accepts comma-separated numbers; regression accepts `x,y` pairs separated by semicolons. Numerical integration uses a fixed 512-interval Simpson approximation, unsupported symbolic limit forms fall back to nearby numerical samples, and the ODE tool uses a 500-step fourth-order Runge–Kutta estimate. Tool results are temporary and are not saved in the project; notebook calculation cells save their inputs and recompute on reopen.
 
 ## Scope of this version
 
-This version does not yet offer general symbolic solving, exact fractions and integrals, custom parameter ranges, additional sliders, vector fields, cross-sections, or cloud sync. Shared variables are currently single lowercase letters; `a` remains the built-in slider, and `x`, `y`, `z`, `r`, and `t` retain their graphing roles. Parametric surfaces use fixed 0–2π ranges, and implicit 3D surfaces use a fixed-resolution mesh in a bounded cube, so small features or distant surfaces may be missed. Implicit 2D curves and inequality boundaries are sampled over the visible viewport. Graph analysis currently covers explicit 2D functions only. Local autosave is stored in browser storage, so export a project file for a durable backup.
+This version does not yet offer a general-purpose symbolic CAS, arbitrary geometry constructions, general surface intersections and nets, programmable activity scripts, cloud sync, classroom collaboration, a resource library, or mobile/AR apps. Shared scalar definitions currently use single lowercase letters, and `x`, `y`, `z`, `r`, and `t` retain graphing roles. Implicit curves and surfaces are sampled, so small or distant features may be missed. Graph analysis primarily covers explicit 2D functions. Local autosave uses device storage; export a project file for a durable backup.
 
 ## Verify
 

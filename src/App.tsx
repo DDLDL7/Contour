@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Calculator, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Moon, Plus, Redo2, RotateCcw, Sun, TableProperties, Trash2, Undo2, Upload } from 'lucide-react'
+import { BookOpenText, Box, Calculator, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Moon, Plus, Redo2, RotateCcw, Sun, TableProperties, Trash2, Undo2, Upload } from 'lucide-react'
 import { Graph2D } from './components/Graph2D'
 import { Graph3D } from './components/Graph3D'
 import { EquationField } from './components/EquationField'
 import { MathTools } from './components/MathTools'
 import { SpreadsheetView } from './components/SpreadsheetView'
 import { ParameterControl } from './components/ParameterControl'
+import { NotebookView } from './components/NotebookView'
 import { formatNumber, type GraphExpression, type PlottableGraph } from './lib/math'
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
@@ -13,7 +14,7 @@ import { compileWorkspace } from './lib/workspace'
 import { evaluateSpreadsheet } from './lib/spreadsheet'
 import { defaultParameterRange, nextParameterName, unusedParameterNames, type SliderParameter } from './lib/parameters'
 
-type View = '2d' | '3d' | 'tools' | 'sheet'
+type View = '2d' | '3d' | 'tools' | 'sheet' | 'notebook'
 type Theme = 'light' | 'dark'
 
 function describeGraph(graph: GraphExpression): string {
@@ -40,10 +41,12 @@ function App() {
     try { return localStorage.getItem('contour-theme') === 'dark' ? 'dark' : 'light' } catch { return 'light' }
   })
   const [saveStatus, setSaveStatus] = useState('Saved on this device')
+  const [animationStop, setAnimationStop] = useState(0)
   const [message, setMessage] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphCanvasRef = useRef<HTMLCanvasElement>(null)
+  const lastSavedAtRef = useRef(Date.now())
 
   useEffect(() => {
     try { localStorage.setItem('contour-theme', theme) } catch { /* Theme still applies for this session. */ }
@@ -84,14 +87,16 @@ function App() {
 
   useEffect(() => {
     setSaveStatus('Saving…')
+    const delay = Math.min(250, Math.max(0, 2000 - (Date.now() - lastSavedAtRef.current)))
     const timeout = window.setTimeout(() => {
       try {
         saveProject({ ...project, updatedAt: new Date().toISOString() })
+        lastSavedAtRef.current = Date.now()
         setSaveStatus('Saved on this device')
       } catch {
         setSaveStatus('Could not save locally. Export a project copy.')
       }
-    }, 250)
+    }, delay)
     return () => window.clearTimeout(timeout)
   }, [project])
 
@@ -99,11 +104,13 @@ function App() {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
         event.preventDefault()
+        setAnimationStop((current) => current + 1)
         setHistory((current) => event.shiftKey ? redoHistory(current) : undoHistory(current))
         return
       }
       if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'y') {
         event.preventDefault()
+        setAnimationStop((current) => current + 1)
         setHistory(redoHistory)
         return
       }
@@ -169,7 +176,7 @@ function App() {
 
   function updateParameter(parameter: SliderParameter, dragging = false) {
     setProject((current) => parameter.name === 'a'
-      ? { ...current, parameterA: parameter.value, parameterARange: { min: parameter.min, max: parameter.max, step: parameter.step } }
+      ? { ...current, parameterA: parameter.value, parameterARange: { min: parameter.min, max: parameter.max, step: parameter.step, animationSeconds: parameter.animationSeconds } }
       : { ...current, parameters: current.parameters.map((item) => item.name === parameter.name ? parameter : item) },
     dragging ? `parameter:${parameter.name}` : null)
   }
@@ -182,7 +189,9 @@ function App() {
     if (!file) return
     try {
       const content = await file.text()
-      setProject(parseProjectFile(content))
+      const imported = parseProjectFile(content)
+      setAnimationStop((current) => current + 1)
+      setProject(imported)
       setMessage(`Opened ${file.name}.`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not open this project.')
@@ -201,7 +210,8 @@ function App() {
 
   function newProject() {
     if (!window.confirm('Start a new project? Export a copy first if you want to keep this one.')) return
-    setProject({ ...starterProject(), title: 'Untitled project', expressions: [], parameterA: 1 })
+    setAnimationStop((current) => current + 1)
+    setProject(starterProject())
     setMessage('New project started.')
   }
 
@@ -217,8 +227,8 @@ function App() {
 
         <div className="header-actions">
           <button className="icon-button header-icon" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
-          <button className="icon-button header-icon" type="button" onClick={() => setHistory(undoHistory)} aria-label="Undo" title="Undo (⌘Z)" disabled={history.past.length === 0}><Undo2 size={18} /></button>
-          <button className="icon-button header-icon" type="button" onClick={() => setHistory(redoHistory)} aria-label="Redo" title="Redo (⌘⇧Z)" disabled={history.future.length === 0}><Redo2 size={18} /></button>
+          <button className="icon-button header-icon" type="button" onClick={() => { setAnimationStop((current) => current + 1); setHistory(undoHistory) }} aria-label="Undo" title="Undo (⌘Z)" disabled={history.past.length === 0}><Undo2 size={18} /></button>
+          <button className="icon-button header-icon" type="button" onClick={() => { setAnimationStop((current) => current + 1); setHistory(redoHistory) }} aria-label="Redo" title="Redo (⌘⇧Z)" disabled={history.future.length === 0}><Redo2 size={18} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => setHelpOpen(true)} aria-label="Help" title="Help"><HelpCircle size={18} /></button>
           <button className="header-button" type="button" onClick={() => fileInputRef.current?.click()}><Upload size={16} /><span>Open</span></button>
           <button className="header-button primary-action" type="button" onClick={() => downloadProject(project)}><Download size={16} /><span>Save project</span></button>
@@ -294,8 +304,8 @@ function App() {
 
           <div className="parameter-panel">
             <div className="parameter-head"><span>Parameters</span><div className="parameter-head-actions"><span className="parameter-count">{project.parameters.length + 1} active</span><select aria-label="New parameter letter" value={selectedParameterName} onChange={(event) => setParameterName(event.target.value)} disabled={!unusedNames.length}>{unusedNames.map((name) => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={addParameter} disabled={!unusedNames.length} aria-label="Add parameter" title="Add parameter"><Plus size={16} /> Add</button></div></div>
-            <ParameterControl parameter={{ name: 'a', value: project.parameterA, ...project.parameterARange }} onChange={updateParameter} />
-            {project.parameters.map((parameter) => <ParameterControl key={parameter.name} parameter={parameter} onChange={updateParameter} onRemove={() => removeParameter(parameter.name)} />)}
+            <ParameterControl parameter={{ name: 'a', value: project.parameterA, ...project.parameterARange }} onChange={updateParameter} stopSignal={animationStop} />
+            {project.parameters.map((parameter) => <ParameterControl key={parameter.name} parameter={parameter} onChange={updateParameter} onRemove={() => removeParameter(parameter.name)} stopSignal={animationStop} />)}
           </div>
 
           <div className="sidebar-footer">
@@ -311,6 +321,7 @@ function App() {
               <button type="button" role="tab" aria-label="3D graph" data-tooltip="3D graph" aria-selected={view === '3d'} className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')}><Box size={18} /></button>
               <button type="button" role="tab" aria-label="Maths tools" data-tooltip="Maths tools" aria-selected={view === 'tools'} className={view === 'tools' ? 'active' : ''} onClick={() => setView('tools')}><Calculator size={18} /></button>
               <button type="button" role="tab" aria-label="Spreadsheet" data-tooltip="Spreadsheet" aria-selected={view === 'sheet'} className={view === 'sheet' ? 'active' : ''} onClick={() => setView('sheet')}><TableProperties size={18} /></button>
+              <button type="button" role="tab" aria-label="Notebook" data-tooltip="Notebook" aria-selected={view === 'notebook'} className={view === 'notebook' ? 'active' : ''} onClick={() => setView('notebook')}><BookOpenText size={18} /></button>
             </div>
             <div className="toolbar-right">
               {(view === '2d' || view === '3d') && <><span className="graph-count">{activeCount} {activeCount === 1 ? 'graph' : 'graphs'}</span>
@@ -319,6 +330,7 @@ function App() {
           </div>
           <div className="graph-wrap">
             {view === 'sheet' ? <SpreadsheetView data={project.spreadsheet} definitions={definitions} parameterA={project.parameterA} onChange={(spreadsheet) => setProject((current) => ({ ...current, spreadsheet }))} />
+              : view === 'notebook' ? <NotebookView cells={project.notebook} expressions={project.expressions} definitions={definitions} parameterA={project.parameterA} parameterARange={project.parameterARange} parameters={project.parameters} onChange={(notebook, group) => setProject((current) => ({ ...current, notebook }), group)} onToggleExpression={(id, visible) => updateRow(id, { visible })} onParameterValueChange={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => name === 'a' ? { ...current, parameterA: value } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value } : item) }) }} />
               : view === '2d'
               ? <Graph2D graphs={graphs} geometry={project.geometry} onGeometryChange={(geometry) => setProject((current) => ({ ...current, geometry }))} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} linkedValues={sheetLinks} />
               : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} solids={project.solids} onSolidsChange={(solids) => setProject((current) => ({ ...current, solids }))} vectorFields={project.vectorFields} onVectorFieldsChange={(vectorFields) => setProject((current) => ({ ...current, vectorFields }))} definitions={definitions} />
@@ -332,7 +344,7 @@ function App() {
               </div>
             )}
           </div>
-          <div className="visual-footer"><span>{view === 'tools' ? 'Tool results are temporary; project expressions continue to save locally.' : view === 'sheet' ? 'Spreadsheet cells save with your project and recalculate from linked values.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
+          <div className="visual-footer"><span>{view === 'tools' ? 'Tool results are temporary; project expressions continue to save locally.' : view === 'sheet' ? 'Spreadsheet cells save with your project and recalculate from linked values.' : view === 'notebook' ? 'Notebook cells save with your project and update from live variables.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
         </section>
       </main>
 

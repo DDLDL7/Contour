@@ -1,8 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { parseProjectFile } from './project'
+import { loadProject, parseProjectFile, PROJECT_KEY, saveProject, starterProject } from './project'
 import { printableNetSvg } from './solids'
 
 describe('project files', () => {
+  it('starts new installations with no graph equations or spreadsheet samples', () => {
+    const project = starterProject()
+    expect(project.expressions).toEqual([])
+    expect(project.spreadsheet.cells).toEqual({})
+  })
+
+  it('clears an untouched auto-saved starter but preserves a changed project', () => {
+    const legacy = {
+      title: 'My graphs', parameterA: 2, parameterARange: { min: -5, max: 5, step: 0.1 },
+      expressions: [
+        { id: 'one', text: 'y = a*sin(x)', color: '#286fc0', visible: true },
+        { id: 'two', text: 'y = 0.15*x^2 - 2', color: '#df7752', visible: true },
+        { id: 'three', text: 'z = a/2*sin(sqrt(x^2 + y^2))', color: '#29967a', visible: true },
+      ],
+      spreadsheet: { cells: { A1: 'x', B1: 'y', A2: '1', B2: '2', A3: '2', B3: '3', A4: '3', B4: '5', A5: '4', B5: '4' } },
+    }
+    try {
+      localStorage.setItem(PROJECT_KEY, JSON.stringify(legacy))
+      expect(loadProject().expressions).toEqual([])
+      expect(loadProject().spreadsheet.cells).toEqual({})
+      localStorage.setItem(PROJECT_KEY, JSON.stringify({ ...legacy, expressions: [...legacy.expressions, { id: 'own', text: 'y = x^3', color: '#805fc2', visible: true }] }))
+      expect(loadProject().expressions).toHaveLength(4)
+    } finally {
+      localStorage.removeItem(PROJECT_KEY)
+    }
+  })
+
   it('preserves the entered LaTeX alongside graph syntax', () => {
     const source = {
       title: 'Fractions',
@@ -36,11 +63,37 @@ describe('project files', () => {
 
   it('preserves custom slider values and ranges in project files', () => {
     const source = {
-      title: 'Sliders', parameterA: 1, parameterARange: { min: -10, max: 10, step: 0.5 },
-      parameters: [{ name: 'b', value: 2.5, min: 0, max: 5, step: 0.5 }], expressions: [],
+      title: 'Sliders', parameterA: 1, parameterARange: { min: -10, max: 10, step: 0.5, animationSeconds: 8 },
+      parameters: [{ name: 'b', value: 2.5, min: 0, max: 5, step: 0.5, animationSeconds: 2 }], expressions: [],
     }
     expect(parseProjectFile(JSON.stringify(source))).toMatchObject({ parameterARange: source.parameterARange, parameters: source.parameters })
     expect(() => parseProjectFile(JSON.stringify({ ...source, parameters: [{ ...source.parameters[0], name: 'x' }] }))).toThrow(/invalid parameters/)
+  })
+
+  it('migrates older project files and preserves notebook activities in current files', () => {
+    const old = parseProjectFile(JSON.stringify({ title: 'Old', parameterA: 1, expressions: [] }))
+    expect(old.version).toBe(2)
+    expect(old.notebook).toEqual([])
+    const notebook = [{ id: 'cell-1', kind: 'visibility', label: 'Show', expressionId: 'curve-1' }]
+    expect(parseProjectFile(JSON.stringify({ ...old, notebook })).notebook).toEqual(notebook)
+    expect(() => parseProjectFile(JSON.stringify({ ...old, notebook: [{ ...notebook[0], kind: 'script' }] }))).toThrow(/invalid notebook/)
+    expect(() => parseProjectFile(JSON.stringify({ ...old, version: 99 }))).toThrow(/newer version/)
+  })
+
+  it('reopens notebook cells and graph visibility from local autosave', () => {
+    const project = starterProject()
+    project.expressions = [{ id: 'curve-1', text: 'y=x', color: '#286fc0', visible: false }]
+    project.notebook = [
+      { id: 'note-1', kind: 'text', content: 'Slope $x^2$ and {{a}}' },
+      { id: 'calc-1', kind: 'calculation', expression: '2+3', operation: 'calculate' },
+      { id: 'toggle-1', kind: 'visibility', label: 'Show the curve', expressionId: 'curve-1' },
+    ]
+    try {
+      saveProject(project)
+      expect(loadProject()).toMatchObject({ expressions: project.expressions, notebook: project.notebook })
+    } finally {
+      localStorage.removeItem(PROJECT_KEY)
+    }
   })
 
   it('preserves saved 3D solid constructions', () => {

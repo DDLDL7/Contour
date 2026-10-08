@@ -1,4 +1,4 @@
-const CACHE = 'contour-static-v3'
+const CACHE = 'contour-static-v4'
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {

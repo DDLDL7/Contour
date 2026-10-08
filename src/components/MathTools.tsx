@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowRight, Blocks, Braces, Calculator, ChartArea, ChartScatter, ChartSpline, Equal, Expand, FunctionSquare, Grid2X2, Grid3X3, Hourglass, ListFilter, Replace, Sigma, SquareFunction, Table2, Target, TrendingUp, Variable, Waypoints, type LucideIcon } from 'lucide-react'
 import { EquationField } from './EquationField'
+import { MathResult } from './MathResult'
 import { runMathTool, type MathTool, type MatrixOperation, type ToolResult } from '../lib/mathTools'
 
 interface Props { parameterA: number; definitions: Readonly<Record<string, number>> }
@@ -132,7 +133,7 @@ export function MathTools({ parameterA, definitions }: Props) {
           }}><option value="add">Add</option><option value="subtract">Subtract</option><option value="multiply">Multiply</option><option value="transpose">Transpose A</option><option value="determinant">Determinant</option><option value="inverse">Inverse</option><option value="eigenvalues">Eigenvalues</option><option value="eigenvectors">Eigenvalues and vectors</option><option value="solve">Solve Ax = b</option></select></label></div>}
           <button className="math-tool-run" type="button" onClick={calculate}>Calculate result <ArrowRight size={16} aria-hidden="true" /></button>
           {error && calculatedInputs === inputSignature && <p className="math-tool-error" role="alert">{error}</p>}
-          {result && calculatedInputs === inputSignature && <div className="math-tool-result" role="status"><span>{result.title}</span><pre>{result.value}</pre>{result.note && <p>{result.note}</p>}</div>}
+          {result && calculatedInputs === inputSignature && <div className="math-tool-result" role="status"><span>{result.title}</span><MathResult value={result.value} />{result.note && <p>{result.note}</p>}</div>}
         </section>
       </div>
     </div>

@@ -178,6 +178,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .parameter-label { justify-content: space-between; }
 .parameter-label label { font-family: Georgia, serif; font-style: italic; color: #256b9e; font-size: 19px; }
 .parameter-label output { border: 1px solid #dce7ee; background: #fff; border-radius: 5px; min-width: 43px; padding: 5px 7px; text-align: center; font-size: 12px; font-weight: 600; color: #4b6071; }
+.parameter-animate { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 1px solid #d1e4f0; border-radius: 5px; background: #eef6fb; color: #2878a7; cursor: pointer; }
+.parameter-animate:hover, .parameter-animate[aria-pressed="true"] { background: #d9ecf7; color: #17638f; }
+.parameter-animate:focus-visible, .parameter-remove:focus-visible, .parameter-settings summary:focus-visible, .parameter-settings form button:focus-visible { outline: 2px solid #3a8dbd; outline-offset: 2px; }
 .parameter-remove { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #8a9aa8; }
 .parameter-remove:hover { background: #f7eaea; color: #a74c45; }
 .parameter-slider { width: 100%; margin: 12px 0 4px; accent-color: #2878b2; cursor: pointer; }
@@ -190,7 +193,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .parameter-settings form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
 .parameter-settings form label { min-width: 0; color: #6f8394; font-size: 10px; }
 .parameter-settings form input { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 5px; border: 1px solid #d7e1e9; border-radius: 5px; background: #fff; color: #344d60; font: inherit; }
-.parameter-settings form button { grid-column: 1 / -1; justify-self: start; border: 0; border-radius: 5px; padding: 5px 10px; background: #e6f0f8; color: #276b9b; font-size: 11px; font-weight: 650; }
+.parameter-settings form .parameter-speed { grid-column: 1 / 3; }
+.parameter-settings form button { grid-column: 3; align-self: end; border: 0; border-radius: 5px; padding: 6px 10px; background: #e6f0f8; color: #276b9b; font-size: 11px; font-weight: 650; cursor: pointer; }
 .parameter-settings p { margin: 6px 0 0; color: #b34d45; }
 .sidebar-footer { justify-content: space-between; gap: 10px; margin-top: auto; padding: 18px 23px; color: #a0adba; font-size: 11px; }
 .sidebar-footer button { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; padding: 0; color: #768da1; font-size: 11.5px; }
@@ -210,6 +214,48 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .export-image:hover { color: #225f8d; }
 .graph-wrap { flex: 1 1 auto; min-height: 350px; position: relative; }
 .math-tools-view { height: 100%; overflow-y: auto; padding: 34px clamp(22px, 4vw, 56px) 48px; background: #f9fbfd; }
+.notebook-view { height: 100%; overflow-y: auto; padding: 34px clamp(22px, 4vw, 56px) 54px; background: #f9fbfd; }
+.notebook-heading, .notebook-toolbar, .notebook-cells, .notebook-empty { max-width: 920px; margin-left: auto; margin-right: auto; }
+.notebook-heading h2 { margin: 6px 0; color: #213c52; font-size: 25px; }
+.notebook-heading p { margin: 0; color: #677f91; font-size: 13px; line-height: 1.6; }
+.notebook-toolbar { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 26px; margin-bottom: 19px; }
+.notebook-toolbar button, .notebook-empty button { display: inline-flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid #cadde9; border-radius: 7px; background: #fff; color: #2a6c99; font-size: 12px; font-weight: 700; }
+.notebook-toolbar button:hover, .notebook-empty button:hover { background: #edf5fa; }
+.notebook-toolbar button:disabled { opacity: .45; cursor: not-allowed; }
+.notebook-empty { display: grid; justify-items: center; gap: 10px; padding: 52px 20px; border: 1px dashed #ccdce7; border-radius: 10px; background: #fff; color: #648097; text-align: center; }
+.notebook-empty strong { color: #2b475d; }
+.notebook-empty p { margin: 0 0 5px; font-size: 12px; }
+.notebook-cells { display: grid; gap: 14px; }
+.notebook-cell { padding: 20px; border: 1px solid #dfe8ee; border-radius: 10px; background: #fff; box-shadow: 0 2px 8px rgba(31, 58, 76, .035); }
+.notebook-cell-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 15px; color: #71899b; font-size: 11px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.notebook-cell-head div { display: flex; gap: 2px; }
+.notebook-cell-head button { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #8aa0af; }
+.notebook-cell-head button:hover { background: #eef4f8; color: #2d658e; }
+.notebook-cell-head button:disabled { opacity: .35; cursor: default; }
+.notebook-cell textarea, .notebook-visibility input[type="text"], .notebook-visibility select, .notebook-input-cell input, .notebook-input-cell select, .notebook-operation select { width: 100%; border: 1px solid #d3e0e9; border-radius: 7px; background: #fff; color: #294358; padding: 10px; font: inherit; font-size: 13px; }
+.notebook-cell textarea { resize: vertical; min-height: 92px; line-height: 1.6; }
+.notebook-preview { margin-top: 13px; padding: 13px 15px; border-left: 3px solid #8fb8d3; background: #f6f9fb; color: #304b61; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-x: auto; }
+.notebook-inline-host { display: inline-flex; vertical-align: middle; }
+.notebook-inline-math { display: inline-block; width: max-content; min-width: 0; border: 0; padding: 0 2px; background: transparent; color: inherit; font-size: 1.05em; }
+.notebook-inline-math::part(virtual-keyboard-toggle), .notebook-inline-math::part(menu-toggle) { display: none; }
+.notebook-operation { display: grid; gap: 6px; max-width: 280px; margin-bottom: 12px; color: #58758b; font-size: 11px; font-weight: 700; }
+.notebook-equation { border: 1px solid #d3e0e9; border-radius: 7px; padding: 2px 12px; }
+.notebook-equation:focus-within { border-color: #85b4d5; outline: 2px solid #deedf8; }
+.notebook-answer { margin-top: 14px; padding: 12px 15px; border: 1px solid #d5e7dc; border-radius: 7px; background: #f5faf7; }
+.notebook-answer .math-result-host { margin-top: 0; }
+.notebook-answer p { color: #678778; font-size: 11px; line-height: 1.5; }
+.notebook-hint, .notebook-error { margin: 10px 0 0; color: #7890a1; font-size: 12px; }
+.notebook-error { color: #b6534f; }
+.notebook-visibility { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 12px; }
+.notebook-visibility > label:not(.notebook-check) { display: grid; gap: 6px; color: #58758b; font-size: 11px; font-weight: 700; }
+.notebook-check { grid-column: 1 / -1; display: flex; align-items: center; gap: 9px; padding: 11px 12px; border: 1px solid #e1e9ef; border-radius: 7px; color: #35536a; font-size: 13px; }
+.notebook-check input { width: 17px; height: 17px; accent-color: #286b9a; }
+.notebook-input-cell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.notebook-input-cell > label, .notebook-parameter-form label { display: grid; gap: 6px; color: #58758b; font-size: 11px; font-weight: 700; }
+.notebook-parameter-form { grid-column: 1 / -1; display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.notebook-parameter-form label { width: min(240px, 100%); }
+.notebook-parameter-form button { min-height: 39px; border: 1px solid #8fb7d1; border-radius: 7px; background: #edf6fb; color: #255e84; padding: 0 16px; font: inherit; font-size: 12px; font-weight: 700; }
+.notebook-parameter-form p { width: 100%; margin: 0; color: #b6534f; font-size: 12px; }
 .spreadsheet-view { height: 100%; overflow: auto; padding: 28px clamp(14px, 2vw, 30px); background: #f8fafc; }
 .spreadsheet-heading { max-width: 1400px; margin: 0 auto 18px; }
 .spreadsheet-heading h2 { margin: 6px 0; color: #213c52; font-size: 23px; }
@@ -321,7 +367,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .math-tool-error { margin: 16px 0 0 !important; color: #b64e49 !important; }
 .math-tool-result { margin-top: 24px; padding: 17px; border: 1px solid #d2e4d9; border-radius: 8px; background: #f6fbf8; }
 .math-tool-result span { color: #527a61; font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
-.math-tool-result pre { overflow-wrap: anywhere; white-space: pre-wrap; margin: 9px 0 0; color: #264638; font: 500 16px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.math-result-host { display: grid; gap: 5px; max-width: 100%; overflow-x: auto; margin-top: 10px; }
+.math-result-field { display: block; width: max-content; max-width: none; border: 0; outline: 0; padding: 0; background: transparent; color: #264638; font-size: 20px; line-height: 1.5; }
+.math-result-field::part(virtual-keyboard-toggle), .math-result-field::part(menu-toggle) { display: none; }
+.math-tool-result .math-result-text { margin-top: 10px; color: #264638; font-size: 15px; font-weight: 600; }
 .math-tool-result p { margin: 8px 0 0; color: #789185; font-size: 11px; line-height: 1.5; }
 .graph-stage { width: 100%; height: 100%; min-height: 350px; position: relative; overflow: hidden; background: #fff; }
 .graph-canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
@@ -400,6 +449,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
   .project-header, .expression-heading { padding-left: 19px; padding-right: 19px; }
   .parameter-panel { padding-left: 19px; padding-right: 19px; }
   .math-tools-view { padding: 24px; }
+  .notebook-view { padding: 24px; }
   .math-tools-grid { grid-template-columns: 1fr; }
   .math-tool-mobile-picker { display: grid; gap: 7px; color: #45637a; font-size: 12px; font-weight: 700; }
   .math-tool-mobile-picker select { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #cfdde8; border-radius: 8px; background: #fff; color: #29475c; font: inherit; }
@@ -421,6 +471,10 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
   .view-switch button { flex: 0 0 auto; }
   .view-switch button { padding: 0 9px; }
   .math-tools-view { padding: 18px 14px 28px; }
+  .notebook-view { padding: 18px 14px 28px; }
+  .notebook-cell { padding: 16px; }
+  .notebook-visibility { grid-template-columns: 1fr; }
+  .notebook-input-cell { grid-template-columns: 1fr; }
   .spreadsheet-layout { grid-template-columns: 1fr; }
   .spreadsheet-scroll { max-height: 48vh; }
   .math-tool-card { padding: 18px; }
@@ -484,6 +538,30 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 }
 .app-shell[data-theme="dark"] .expression-panel,
 .app-shell[data-theme="dark"] .math-tools-view { background: #15191d; }
+.app-shell[data-theme="dark"] .notebook-view { background: #15191d; }
+.app-shell[data-theme="dark"] .notebook-heading h2,
+.app-shell[data-theme="dark"] .notebook-empty strong { color: #dce5eb; }
+.app-shell[data-theme="dark"] .notebook-heading p,
+.app-shell[data-theme="dark"] .notebook-cell-head,
+.app-shell[data-theme="dark"] .notebook-operation,
+.app-shell[data-theme="dark"] .notebook-visibility > label:not(.notebook-check),
+.app-shell[data-theme="dark"] .notebook-input-cell > label,
+.app-shell[data-theme="dark"] .notebook-parameter-form label { color: #9aaab5; }
+.app-shell[data-theme="dark"] .notebook-cell,
+.app-shell[data-theme="dark"] .notebook-empty { background: #191e23; border-color: #303941; }
+.app-shell[data-theme="dark"] .notebook-toolbar button,
+.app-shell[data-theme="dark"] .notebook-empty button { background: #202b33; border-color: #385267; color: #afd6ee; }
+.app-shell[data-theme="dark"] .notebook-cell textarea,
+.app-shell[data-theme="dark"] .notebook-visibility input[type="text"],
+.app-shell[data-theme="dark"] .notebook-visibility select,
+.app-shell[data-theme="dark"] .notebook-input-cell input,
+.app-shell[data-theme="dark"] .notebook-input-cell select,
+.app-shell[data-theme="dark"] .notebook-operation select,
+.app-shell[data-theme="dark"] .notebook-equation { background: #20262b; border-color: #3a454e; color: #d4dfe6; }
+.app-shell[data-theme="dark"] .notebook-parameter-form button { background: #202b33; border-color: #385267; color: #afd6ee; }
+.app-shell[data-theme="dark"] .notebook-preview,
+.app-shell[data-theme="dark"] .notebook-check { background: #20272c; border-color: #385267; color: #c5d8e4; }
+.app-shell[data-theme="dark"] .notebook-answer { background: #18231e; border-color: #355443; }
 .app-shell[data-theme="dark"] .spreadsheet-view { background: #15191d; }
 .app-shell[data-theme="dark"] .spreadsheet-heading h2,
 .app-shell[data-theme="dark"] .spreadsheet-card-heading h3 { color: #dce5eb; }
@@ -575,10 +653,14 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .app-shell[data-theme="dark"] .parameter-head-actions select,
 .app-shell[data-theme="dark"] .parameter-settings form input { background: #20262b; border-color: #3a454e; color: #c7d9e5; }
 .app-shell[data-theme="dark"] .parameter-settings form button { background: #253d4e; color: #b5dcf4; }
+.app-shell[data-theme="dark"] .parameter-animate { background: #223948; border-color: #31536a; color: #a5d9f5; }
+.app-shell[data-theme="dark"] .parameter-animate:hover,
+.app-shell[data-theme="dark"] .parameter-animate[aria-pressed="true"] { background: #31536a; color: #e1f4ff; }
 .app-shell[data-theme="dark"] .parameter-settings,
 .app-shell[data-theme="dark"] .parameter-settings form label { color: #a9b8c2; }
 .app-shell[data-theme="dark"] .math-tool-result { background: #18231e; border-color: #355443; }
-.app-shell[data-theme="dark"] .math-tool-result pre { color: #c3e4ce; }
+.app-shell[data-theme="dark"] .math-result-field,
+.app-shell[data-theme="dark"] .math-tool-result .math-result-text { color: #c3e4ce; }
 .app-shell[data-theme="dark"] .analysis-panel,
 .app-shell[data-theme="dark"] .trace-card,
 .app-shell[data-theme="dark"] .coordinate-readout,
