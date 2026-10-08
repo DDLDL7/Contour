@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { compileGraph } from './math'
-import { estimateSlope, findCurveExtrema, findCurveIntersections, findCurveRoots } from './analysis'
+import { estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from './analysis'
 
 describe('2D numerical graph analysis', () => {
   it('finds crossing and touching roots without reporting an asymptote as a root', () => {
@@ -36,5 +36,13 @@ describe('2D numerical graph analysis', () => {
     expect(findCurveExtrema(cosine, 0, -1, 1)[0]).toMatchObject({ kind: 'maximum' })
     expect(estimateSlope(parabola, 0, 2)).toBeCloseTo(2, 3)
     expect(estimateSlope(cusp, 0, 0)).toBeNaN()
+  })
+
+  it('locates sign changes in curvature as approximate inflection points', () => {
+    const cubic = compileGraph('y = x^3')
+    const points = findCurveInflections(cubic, 0, -3, 3)
+    expect(points).toHaveLength(1)
+    expect(points[0].x).toBeCloseTo(0, 3)
+    expect(points[0].y).toBeCloseTo(0, 3)
   })
 })

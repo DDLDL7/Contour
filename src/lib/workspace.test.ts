@@ -38,4 +38,18 @@ describe('shared workspace variables', () => {
     expect(compiled[1].error).toContain('Fix the definition')
     expect(compiled[2].graph?.evaluate(Math.PI / 2, 0, 2)).toBeCloseTo(1)
   })
+
+  it('links active spreadsheet cell values into graph expressions', () => {
+    const compiled = compileWorkspace(rows('y = A2*x'), 1, { A2: 3.5 })
+    expect(compiled[0].graph?.evaluate(2, 0, 1)).toBe(7)
+  })
+
+  it('updates graphs and derived variables from added parameters', () => {
+    const input = rows('y = b*x + c', 'c = 2*b')
+    const first = compileWorkspace(input, 1, {}, { b: 2 })
+    const second = compileWorkspace(input, 1, {}, { b: 3 })
+    expect(first[0].graph?.evaluate(2, 0, 1)).toBe(8)
+    expect(second[0].graph?.evaluate(2, 0, 1)).toBe(12)
+    expect(compileWorkspace(rows('b = 7', 'y = b*x'), 1, {}, { b: 2 })[0].error).toContain('slider')
+  })
 })

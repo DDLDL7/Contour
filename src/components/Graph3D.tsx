@@ -3,11 +3,21 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { evaluateSpatialPoint, type PlottableGraph } from '../lib/math'
 import { sampleImplicitSurface, sampleParametricSurface, type MeshSamples } from '../lib/meshing'
+import { printableNetSvg, type SolidObject, type SolidShape } from '../lib/solids'
+import type { VectorFieldObject } from '../lib/solids'
+import { compileScalarDefinition } from '../lib/math'
+import { contourSegments, sampleScalarGrid } from '../lib/contours'
 
 interface Props {
   graphs: PlottableGraph[]
   parameterA: number
   canvasRef: RefObject<HTMLCanvasElement | null>
+  darkMode: boolean
+  solids: SolidObject[]
+  onSolidsChange: (solids: SolidObject[]) => void
+  vectorFields: VectorFieldObject[]
+  onVectorFieldsChange: (fields: VectorFieldObject[]) => void
+  definitions: Readonly<Record<string, number>>
 }
 
 interface SceneState {
@@ -16,6 +26,7 @@ interface SceneState {
   camera: THREE.PerspectiveCamera
   controls: OrbitControls
   surfaces: THREE.Group
+  grid: THREE.GridHelper
 }
 
 function makeSurface(graph: PlottableGraph, parameterA: number, wireframe: boolean): THREE.Mesh | null {
@@ -121,10 +132,14 @@ function makeSampledSurface(samples: MeshSamples, color: string, wireframe: bool
   return new THREE.Mesh(geometry, material)
 }
 
-export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
+export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSolidsChange, vectorFields, onVectorFieldsChange, definitions }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<SceneState | null>(null)
   const [wireframe, setWireframe] = useState(false)
+  const [sectionEnabled, setSectionEnabled] = useState(false)
+  const [sectionHeight, setSectionHeight] = useState(1)
+  const [fieldInput, setFieldInput] = useState({ fx: '-y', fy: 'x', fz: '0' })
+  const [fieldError, setFieldError] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -176,7 +191,7 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
       render()
     })
     observer.observe(container)
-    sceneRef.current = { renderer, scene, camera, controls, surfaces }
+    sceneRef.current = { renderer, scene, camera, controls, surfaces, grid }
     render()
 
     return () => {
@@ -192,6 +207,16 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
       sceneRef.current = null
     }
   }, [canvasRef])
+
+  useEffect(() => {
+    const state = sceneRef.current
+    if (!state) return
+    state.renderer.setClearColor(darkMode ? '#111417' : '#ffffff')
+    const materials = Array.isArray(state.grid.material) ? state.grid.material : [state.grid.material]
+    materials[0]?.color.set(darkMode ? '#687681' : '#a9b9c7')
+    materials[1]?.color.set(darkMode ? '#303b44' : '#e1e7ec')
+    state.renderer.render(state.scene, state.camera)
+  }, [darkMode])
 
   useEffect(() => {
     const state = sceneRef.current
@@ -215,6 +240,100 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
         state.surfaces.add(...makeSpaceCurve(graph, parameterA))
       }
     }
+    const explicitSurfaces = graphs.filter((item) => item.visible && item.graph.kind === 'surface')
+    for (let first = 0; first < explicitSurfaces.length; first += 1) for (let second = first + 1; second < explicitSurfaces.length; second += 1) {
+      const a = explicitSurfaces[first]; const b = explicitSurfaces[second]
+      const width = 1200; const height = 1000
+      const grid = sampleScalarGrid((x, y) => a.graph.evaluate(x, y, parameterA) - b.graph.evaluate(x, y, parameterA), width, height, (pixel) => -6 + pixel / 100, (pixel) => 5 - pixel / 100)
+      const positions: number[] = []
+      for (const [x1, y1, x2, y2] of contourSegments(grid)) {
+        const xA = -6 + x1 / 100; const yA = 5 - y1 / 100
+        const xB = -6 + x2 / 100; const yB = 5 - y2 / 100
+        const zA = (a.graph.evaluate(xA, yA, parameterA) + b.graph.evaluate(xA, yA, parameterA)) / 2
+        const zB = (a.graph.evaluate(xB, yB, parameterA) + b.graph.evaluate(xB, yB, parameterA)) / 2
+        if ([xA, yA, zA, xB, yB, zB].every(Number.isFinite) && Math.max(Math.abs(zA), Math.abs(zB)) < 30) positions.push(xA, zA, yA, xB, zB, yB)
+      }
+      if (positions.length) {
+        const geometry = new THREE.BufferGeometry()
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+        state.surfaces.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: '#dd4d4d', linewidth: 2 })))
+      }
+    }
+    const makePrimitive = (item: SolidObject) => {
+      const size = item.size
+      if (item.shape === 'sphere') return new THREE.SphereGeometry(size, 32, 20)
+      if (item.shape === 'cube') return new THREE.BoxGeometry(size * 1.6, size * 1.6, size * 1.6)
+      if (item.shape === 'cylinder') return new THREE.CylinderGeometry(size, size, size * 2, 32)
+      if (item.shape === 'pyramid') return new THREE.ConeGeometry(size, size * 2, 4)
+      return new THREE.ConeGeometry(size, size * 2, 32)
+    }
+    solids.filter((item) => item.visible).forEach((item) => {
+      const material = new THREE.MeshStandardMaterial({ color: item.color, wireframe, roughness: 0.58, transparent: true, opacity: 0.84, side: THREE.DoubleSide })
+      const mesh = new THREE.Mesh(makePrimitive(item), material)
+      // Mathematical z is the vertical Three.js axis, as it is for plotted surfaces.
+      mesh.position.set(item.x, item.z, item.y)
+      mesh.updateMatrixWorld(true)
+      state.surfaces.add(mesh)
+      if (sectionEnabled) {
+        const position = mesh.geometry.getAttribute('position')
+        const index = mesh.geometry.getIndex()
+        const getVertex = (vertex: number) => mesh.localToWorld(new THREE.Vector3(position.getX(vertex), position.getY(vertex), position.getZ(vertex)))
+        const sections: number[] = []
+        const triangleCount = index ? index.count / 3 : position.count / 3
+        for (let triangle = 0; triangle < triangleCount; triangle += 1) {
+          const vertices = [0, 1, 2].map((corner) => getVertex(index ? index.getX(triangle * 3 + corner) : triangle * 3 + corner))
+          const intersections: THREE.Vector3[] = []
+          for (let edge = 0; edge < 3; edge += 1) {
+            const first = vertices[edge]; const second = vertices[(edge + 1) % 3]
+            const firstDelta = first.y - sectionHeight; const secondDelta = second.y - sectionHeight
+            if (firstDelta * secondDelta > 0 || Math.abs(firstDelta - secondDelta) < 1e-12) continue
+            const fraction = firstDelta / (firstDelta - secondDelta)
+            if (fraction >= 0 && fraction <= 1) intersections.push(first.clone().lerp(second, fraction))
+          }
+          if (intersections.length >= 2) sections.push(intersections[0].x, sectionHeight, intersections[0].z, intersections[1].x, sectionHeight, intersections[1].z)
+        }
+        if (sections.length) {
+          const sectionGeometry = new THREE.BufferGeometry()
+          sectionGeometry.setAttribute('position', new THREE.Float32BufferAttribute(sections, 3))
+          state.surfaces.add(new THREE.LineSegments(sectionGeometry, new THREE.LineBasicMaterial({ color: '#e05252', linewidth: 2 })))
+        }
+      }
+    })
+    if (sectionEnabled) {
+      const planeGeometry = new THREE.PlaneGeometry(18, 18)
+      const planeMaterial = new THREE.MeshBasicMaterial({ color: '#df7752', side: THREE.DoubleSide, transparent: true, opacity: 0.12, depthWrite: false })
+      const plane = new THREE.Mesh(planeGeometry, planeMaterial)
+      plane.rotation.x = -Math.PI / 2
+      plane.position.y = sectionHeight
+      plane.renderOrder = 2
+      state.surfaces.add(plane)
+    }
+    vectorFields.filter((field) => field.visible).forEach((field) => {
+      try {
+        const fx = compileScalarDefinition(field.fx, ['x', 'y', 'z', ...Object.keys(definitions)])
+        const fy = compileScalarDefinition(field.fy, ['x', 'y', 'z', ...Object.keys(definitions)])
+        const fz = compileScalarDefinition(field.fz, ['x', 'y', 'z', ...Object.keys(definitions)])
+        const segments: number[] = []
+        for (let x = -4; x <= 4; x += 2) for (let y = -4; y <= 4; y += 2) for (let z = -4; z <= 4; z += 2) {
+          const scope = { ...definitions, x, y, z, a: parameterA }
+          const vector = new THREE.Vector3(fx.evaluate(scope), fz.evaluate(scope), fy.evaluate(scope))
+          const magnitude = vector.length()
+          if (!Number.isFinite(magnitude) || magnitude < 1e-8 || magnitude > 1e7) continue
+          vector.normalize()
+          const length = Math.min(1.5, 0.25 + Math.log1p(magnitude) * 0.18)
+          const start = new THREE.Vector3(x, z, y)
+          const tip = start.clone().addScaledVector(vector, length)
+          const side = new THREE.Vector3().crossVectors(vector, Math.abs(vector.y) < .9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize().multiplyScalar(length * .18)
+          const back = tip.clone().addScaledVector(vector, -length * .25)
+          segments.push(start.x, start.y, start.z, tip.x, tip.y, tip.z,
+            tip.x, tip.y, tip.z, back.x + side.x, back.y + side.y, back.z + side.z,
+            tip.x, tip.y, tip.z, back.x - side.x, back.y - side.y, back.z - side.z)
+        }
+        const geometry = new THREE.BufferGeometry()
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(segments, 3))
+        state.surfaces.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: field.color })))
+      } catch { /* Invalid saved fields are ignored by the renderer. */ }
+    })
     state.renderer.render(state.scene, state.camera)
     const addAdvanced = (graph: PlottableGraph, samples?: MeshSamples) => {
       if (!active) return
@@ -259,7 +378,33 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
       active = false
       worker?.terminate()
     }
-  }, [graphs, parameterA, wireframe])
+  }, [graphs, parameterA, wireframe, solids, sectionEnabled, sectionHeight, vectorFields, definitions])
+
+  function addSolid(shape: SolidShape) {
+    const index = solids.length
+    const colors = ['#25a6b8', '#ef7864', '#8a70c8', '#e6ae4e', '#529b78']
+    onSolidsChange([...solids, { id: crypto.randomUUID(), shape, x: ((index % 3) - 1) * 3, y: Math.floor(index / 3) * 3, z: 1, size: 1, color: colors[index % colors.length], visible: true }])
+  }
+
+  function downloadNet(shape: 'cube' | 'pyramid') {
+    const blob = new Blob([printableNetSvg(shape)], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `contour-${shape}-net.svg`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  function addVectorField() {
+    try {
+      compileScalarDefinition(fieldInput.fx, ['x', 'y', 'z', ...Object.keys(definitions)])
+      compileScalarDefinition(fieldInput.fy, ['x', 'y', 'z', ...Object.keys(definitions)])
+      compileScalarDefinition(fieldInput.fz, ['x', 'y', 'z', ...Object.keys(definitions)])
+      onVectorFieldsChange([...vectorFields, { id: crypto.randomUUID(), ...fieldInput, color: '#25a6b8', visible: true }])
+      setFieldError('')
+    } catch (cause) { setFieldError(cause instanceof Error ? cause.message : 'Check the vector field expressions.') }
+  }
 
   return (
     <div className="graph-stage" ref={containerRef}>
@@ -275,6 +420,19 @@ export function Graph3D({ graphs, parameterA, canvasRef }: Props) {
               state.controls.update()
             }} aria-label="Reset 3D view" className="reset-view">⌖</button>
             <button type="button" onClick={() => setWireframe((current) => !current)} aria-label={wireframe ? 'Show solid surface' : 'Show wireframe'} className="wireframe-toggle">{wireframe ? 'Solid' : 'Mesh'}</button>
+            <div className="solid-controls" aria-label="3D solid constructions">
+              {(['sphere', 'cube', 'cylinder', 'cone', 'pyramid'] as SolidShape[]).map((shape) => <button key={shape} type="button" onClick={() => addSolid(shape)}>+ {shape[0].toUpperCase() + shape.slice(1)}</button>)}
+              <button type="button" onClick={() => downloadNet('cube')}>Cube net</button><button type="button" onClick={() => downloadNet('pyramid')}>Pyramid net</button>
+              {solids.map((solid) => <button key={solid.id} type="button" title="Remove solid" onClick={() => onSolidsChange(solids.filter((item) => item.id !== solid.id))}>− {solid.shape}</button>)}
+              <button type="button" aria-pressed={sectionEnabled} className={sectionEnabled ? 'active' : ''} onClick={() => setSectionEnabled((enabled) => !enabled)}>Cross-section</button>
+              {sectionEnabled && <label className="slice-height">z={sectionHeight.toFixed(1)}<input aria-label="Cross-section z height" type="range" min="-2" max="4" step="0.1" value={sectionHeight} onChange={(event) => setSectionHeight(Number(event.target.value))} /></label>}
+              <label className="field-input">Fₓ<input aria-label="Vector field x component" value={fieldInput.fx} onChange={(event) => setFieldInput((current) => ({ ...current, fx: event.target.value }))} /></label>
+              <label className="field-input">Fᵧ<input aria-label="Vector field y component" value={fieldInput.fy} onChange={(event) => setFieldInput((current) => ({ ...current, fy: event.target.value }))} /></label>
+              <label className="field-input">F𝓏<input aria-label="Vector field z component" value={fieldInput.fz} onChange={(event) => setFieldInput((current) => ({ ...current, fz: event.target.value }))} /></label>
+              <button type="button" onClick={addVectorField}>Add field</button>
+              {vectorFields.map((field) => <button key={field.id} type="button" title="Remove vector field" onClick={() => onVectorFieldsChange(vectorFields.filter((item) => item.id !== field.id))}>− Field</button>)}
+            </div>
+            {fieldError && <div className="graph-error field-error" role="alert">{fieldError}</div>}
           </div>
           <div className="coordinate-readout">Drag to rotate · Scroll to zoom</div>
           <div className="axis-key"><span className="axis-x">x</span><span className="axis-y">y</span><span className="axis-z">z</span></div>

@@ -15,18 +15,20 @@ function definitionName(text: string): string | null {
   return match && !graphTargets.has(match[1]) ? match[1] : null
 }
 
-export function compileWorkspace(rows: ExpressionRow[], parameterA: number): CompiledWorkspaceRow[] {
+export function compileWorkspace(rows: ExpressionRow[], parameterA: number, linkedValues: Readonly<Record<string, number>> = {}, parameters: Readonly<Record<string, number>> = {}): CompiledWorkspaceRow[] {
   const names = rows.map((row) => definitionName(row.text))
   const counts = new Map<string, number>()
   for (const name of names) if (name) counts.set(name, (counts.get(name) ?? 0) + 1)
 
   const definitions = new Map<string, ReturnType<typeof compileScalarDefinition>>()
   const errors = new Map<string, string>()
-  const allowedNames = [...counts.keys()].filter((name) => !reservedNames.has(name))
+  const allowedNames = [...new Set([...counts.keys(), ...Object.keys(parameters)])].filter((name) => !reservedNames.has(name))
   rows.forEach((row, index) => {
     const name = names[index]
     if (!name) return
-    if (reservedNames.has(name)) {
+    if (Object.hasOwn(parameters, name)) {
+      errors.set(name, `“${name}” is controlled by a slider. Remove the duplicate definition.`)
+    } else if (reservedNames.has(name)) {
       errors.set(name, name === 'a' ? '“a” is controlled by the slider.' : `“${name}” is reserved. Choose another letter.`)
     } else if (counts.get(name)! > 1) {
       errors.set(name, `“${name}” is defined more than once.`)
@@ -39,7 +41,7 @@ export function compileWorkspace(rows: ExpressionRow[], parameterA: number): Com
     }
   })
 
-  const values = new Map<string, number>()
+  const values = new Map<string, number>(Object.entries(parameters))
   const visiting = new Set<string>()
   const resolve = (name: string, trail: string[]): number => {
     if (values.has(name)) return values.get(name)!
@@ -71,7 +73,7 @@ export function compileWorkspace(rows: ExpressionRow[], parameterA: number): Com
   }
   for (const name of allowedNames) resolve(name, [])
 
-  const scope = Object.fromEntries(values)
+  const scope = { ...Object.fromEntries(values), ...linkedValues }
   return rows.map((row, index) => {
     const name = names[index]
     if (name) {

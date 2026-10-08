@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { estimateSlope, findCurveExtrema, findCurveIntersections, findCurveRoots } from '../lib/analysis'
+import { Circle, CircleDot, Crosshair, DraftingCompass, Ellipse, Link, Move, MousePointer2, Orbit, Pentagon, Ruler, Triangle, Waves } from 'lucide-react'
+import { estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from '../lib/analysis'
 import { contourSegments, sampleScalarGrid, type ScalarGrid } from '../lib/contours'
 import { evaluatePlanarPoint, formatNumber, type PlottableGraph } from '../lib/math'
+import { fitConic, intersectGeometryPaths, resolveGeometryPoints as resolveGeometryPointObjects, sampleLineEnvelope, type GeometryCircle, type GeometryConic, type GeometryEllipse, type GeometryEnvelope, type GeometryLocus, type GeometryObject, type GeometryPath, type GeometryPoint, type GeometryTool, type GeometryTransform, type TransformOperation } from '../lib/geometry'
 
 interface Viewport {
   centerX: number
@@ -11,12 +13,16 @@ interface Viewport {
 
 interface Props {
   graphs: PlottableGraph[]
+  geometry: GeometryObject[]
+  onGeometryChange: (geometry: GeometryObject[]) => void
   parameterA: number
   canvasRef: RefObject<HTMLCanvasElement | null>
+  darkMode: boolean
+  linkedValues: Readonly<Record<string, number>>
 }
 
 interface AnalysisFeature {
-  kind: 'root' | 'minimum' | 'maximum' | 'intersection'
+  kind: 'root' | 'y-intercept' | 'minimum' | 'maximum' | 'inflection' | 'intersection'
   x: number
   y: number
   graphId: string
@@ -28,6 +34,19 @@ const initialViewport: Viewport = { centerX: 0, centerY: 0, scale: 52 }
 const minScale = 0.05
 const maxScale = 320
 const buttonZoomFactor = 1.6
+
+function ConstructionGlyph({ kind }: { kind: 'line' | 'segment' | 'ray' | 'vector' | 'perimeter' | 'area' }) {
+  if (kind === 'perimeter' || kind === 'area') return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="4" width="16" height="16" rx="1" fill={kind === 'area' ? 'currentColor' : 'none'} fillOpacity={kind === 'area' ? '.22' : undefined} strokeDasharray={kind === 'perimeter' ? '3 2' : undefined} />
+  </svg>
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 12h16" />
+    {kind === 'line' && <><path d="m7 9-3 3 3 3" /><path d="m17 9 3 3-3 3" /></>}
+    {kind === 'segment' && <><circle cx="4" cy="12" r="1.7" fill="currentColor" /><circle cx="20" cy="12" r="1.7" fill="currentColor" /></>}
+    {kind === 'ray' && <><circle cx="4" cy="12" r="1.7" fill="currentColor" /><path d="m17 9 3 3-3 3" /></>}
+    {kind === 'vector' && <path d="m17 9 3 3-3 3" />}
+  </svg>
+}
 
 function gridStep(scale: number): number {
   const target = 82 / scale
@@ -76,14 +95,46 @@ function drawInequalityShade(ctx: CanvasRenderingContext2D, grid: ScalarGrid, co
   ctx.drawImage(shadeCanvas, 0, 0, grid.width, grid.height)
 }
 
-export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
+export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvasRef, darkMode, linkedValues }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const dragRef = useRef<{ x: number; y: number; viewport: Viewport } | null>(null)
+  const dragRef = useRef<{ kind: 'pan'; x: number; y: number; viewport: Viewport } | { kind: 'point'; id: string; x: number; y: number } | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewport, setViewport] = useState(initialViewport)
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [trace, setTrace] = useState<{ graphId: string; x: number } | null>(null)
+  const [geometryTool, setGeometryTool] = useState<GeometryTool>('select')
+  const [pendingVertices, setPendingVertices] = useState<{ id: string; point: GeometryPoint; isNew: boolean }[]>([])
+  const [previewPoint, setPreviewPoint] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [selectedPointId, setSelectedPointId] = useState<string | null>(null)
+  const [selectedGeometryId, setSelectedGeometryId] = useState<string | null>(null)
+  const [linkedXCell, setLinkedXCell] = useState('A2')
+  const [linkedYCell, setLinkedYCell] = useState('B2')
+  const [envelopeInput, setEnvelopeInput] = useState({ slope: 't', intercept: '-t^2/2', start: '-4', end: '4' })
+  const [transformOperation, setTransformOperation] = useState<TransformOperation>('translate')
+  const [transformValues, setTransformValues] = useState({ dx: '1', dy: '0', centerX: '0', centerY: '0', angleDegrees: '90', scale: '2', radius: '2' })
+
+  const visibleGeometry = useMemo(() => {
+    const points = new Map(geometry.filter((object): object is GeometryPoint => object.kind === 'point').map((point) => [point.id, point]))
+    const paths = new Map(geometry.filter((object): object is GeometryPath => ['line', 'ray', 'segment', 'vector'].includes(object.kind)).map((path) => [path.id, path]))
+    const resolve = (id: string, seen = new Set<string>()): GeometryPoint | null => {
+      const point = points.get(id)
+      if (!point || seen.has(id)) return null
+      seen.add(id)
+      if (point.id === previewPoint?.id) return { ...point, x: previewPoint.x, y: previewPoint.y }
+      if (point.xCell && point.yCell) return { ...point, x: linkedValues[point.xCell] ?? Number.NaN, y: linkedValues[point.yCell] ?? Number.NaN }
+      if (point.intersectionOf) {
+        const [firstPath, secondPath] = point.intersectionOf.map((pathId) => paths.get(pathId))
+        if (!firstPath || !secondPath) return { ...point, x: Number.NaN, y: Number.NaN }
+        const endpoints = [firstPath.startId, firstPath.endId, secondPath.startId, secondPath.endId].map((pointId) => resolve(pointId, new Set(seen)))
+        if (endpoints.some((item) => !item)) return { ...point, x: Number.NaN, y: Number.NaN }
+        const coordinates = intersectGeometryPaths(firstPath, secondPath, new Map(endpoints.map((item) => [item!.id, item!])))
+        return coordinates ? { ...point, ...coordinates } : { ...point, x: Number.NaN, y: Number.NaN }
+      }
+      return point
+    }
+    return geometry.map((object) => object.kind === 'point' ? resolve(object.id) ?? { ...object, x: Number.NaN, y: Number.NaN } : object)
+  }, [geometry, linkedValues, previewPoint])
 
   const analysis = useMemo(() => {
     if (!analysisOpen || size.width === 0 || size.height === 0) return { features: [] as AnalysisFeature[], omittedGraphs: 0, curveCount: 0 }
@@ -107,6 +158,13 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
       }
       for (const point of findCurveExtrema(item.graph, parameterA, minX, maxX)) {
         add(point.kind, point.x, point.y, item.id, item.color, label)
+      }
+      for (const point of findCurveInflections(item.graph, parameterA, minX, maxX)) {
+        add(point.kind, point.x, point.y, item.id, item.color, label)
+      }
+      if (minX <= 0 && maxX >= 0) {
+        const y = item.graph.evaluate(0, 0, parameterA)
+        add('y-intercept', 0, y, item.id, item.color, label)
       }
       for (const other of curves.slice(index + 1)) {
         for (const point of findCurveIntersections(item.graph, other.graph, parameterA, minX, maxX)) {
@@ -147,7 +205,10 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     const worldX = (pixel: number) => centerX + (pixel - width / 2) / scale
     const worldY = (pixel: number) => centerY - (pixel - height / 2) / scale
 
-    ctx.fillStyle = '#ffffff'
+    const palette = darkMode
+      ? { background: '#111417', grid: '#293139', axes: '#77848e', labels: '#a3adb5', point: '#171c20' }
+      : { background: '#ffffff', grid: '#e8edf3', axes: '#9aa9b9', labels: '#77899a', point: '#ffffff' }
+    ctx.fillStyle = palette.background
     ctx.fillRect(0, 0, width, height)
 
     const scalarGrids = new Map<string, ScalarGrid>()
@@ -166,7 +227,7 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     const xMax = worldX(width)
     const yMin = worldY(height)
     const yMax = worldY(0)
-    ctx.strokeStyle = '#e8edf3'
+    ctx.strokeStyle = palette.grid
     ctx.lineWidth = 1
     ctx.beginPath()
     for (let x = Math.ceil(xMin / step) * step; x <= xMax; x += step) {
@@ -181,7 +242,7 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     }
     ctx.stroke()
 
-    ctx.strokeStyle = '#9aa9b9'
+    ctx.strokeStyle = palette.axes
     ctx.lineWidth = 1.3
     ctx.beginPath()
     if (xMin <= 0 && xMax >= 0) {
@@ -194,7 +255,7 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     }
     ctx.stroke()
 
-    ctx.fillStyle = '#77899a'
+    ctx.fillStyle = palette.labels
     ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif'
     for (let x = Math.ceil(xMin / step) * step; x <= xMax; x += step) {
       if (Math.abs(x) < step / 100) continue
@@ -274,13 +335,284 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
       ctx.setLineDash([])
     }
 
+    const geometryPoints = new Map(visibleGeometry.filter((item): item is GeometryPoint => item.kind === 'point').map((point) => [point.id, point]))
+    const resolveGeometryPoints = (id: string, seen = new Set<string>()): GeometryPoint[] => {
+      if (seen.has(id)) return []
+      seen.add(id)
+      const object = visibleGeometry.find((item) => item.id === id)
+      if (!object || !object.visible) return []
+      if (object.kind === 'point') return [object]
+      if (object.kind === 'polygon') return object.pointIds.map((pointId) => geometryPoints.get(pointId)).filter((point): point is GeometryPoint => Boolean(point?.visible))
+      if (object.kind === 'line' || object.kind === 'segment' || object.kind === 'ray' || object.kind === 'vector') {
+        const points = [geometryPoints.get(object.startId), geometryPoints.get(object.endId)]
+        return points.filter((point): point is GeometryPoint => Boolean(point?.visible))
+      }
+      if (object.kind !== 'transform') return []
+      const sourcePoints = resolveGeometryPoints(object.sourceId, seen)
+      return sourcePoints.map((point) => {
+        let x = point.x
+        let y = point.y
+        if (object.operation === 'translate') { x += object.dx; y += object.dy }
+        if (object.operation === 'reflect-x') y = -y
+        if (object.operation === 'reflect-y') x = -x
+        if (object.operation === 'reflect-origin') { x = -x; y = -y }
+        if (object.operation === 'rotate') {
+          const angle = object.angleDegrees * Math.PI / 180
+          const dx = x - object.centerX; const dy = y - object.centerY
+          x = object.centerX + dx * Math.cos(angle) - dy * Math.sin(angle)
+          y = object.centerY + dx * Math.sin(angle) + dy * Math.cos(angle)
+        }
+        if (object.operation === 'dilate') { x = object.centerX + (x - object.centerX) * object.scale; y = object.centerY + (y - object.centerY) * object.scale }
+        if (object.operation === 'invert') {
+          const dx = x - object.centerX; const dy = y - object.centerY
+          const distance2 = dx * dx + dy * dy
+          if (distance2 < 1e-12) return { ...point, x: Number.NaN, y: Number.NaN }
+          x = object.centerX + object.radius * object.radius * dx / distance2
+          y = object.centerY + object.radius * object.radius * dy / distance2
+        }
+        return { ...point, id: `${object.id}:${point.id}`, label: `${point.label}′`, x, y, color: object.color }
+      })
+    }
+    for (const object of visibleGeometry) {
+      if (!object.visible || object.kind === 'point' || object.kind === 'measurement') continue
+      ctx.strokeStyle = object.color
+      ctx.lineWidth = 2.2
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      if (object.kind === 'circle') {
+        const center = geometryPoints.get(object.centerId); const radiusPoint = geometryPoints.get(object.radiusPointId)
+        if (!center || !radiusPoint) continue
+        const radius = Math.hypot(sx(radiusPoint.x) - sx(center.x), sy(radiusPoint.y) - sy(center.y))
+        if (radius < 1) continue
+        ctx.arc(sx(center.x), sy(center.y), radius, 0, Math.PI * 2)
+        ctx.stroke()
+        continue
+      }
+      if (object.kind === 'ellipse') {
+        const center = geometryPoints.get(object.centerId); const axisX = geometryPoints.get(object.axisXId); const axisY = geometryPoints.get(object.axisYId)
+        if (!center || !axisX || !axisY) continue
+        const cx = sx(center.x); const cy = sy(center.y)
+        const ax = { x: sx(axisX.x) - cx, y: sy(axisX.y) - cy }
+        const by = { x: sx(axisY.x) - cx, y: sy(axisY.y) - cy }
+        if (Math.hypot(ax.x, ax.y) < 1 || Math.hypot(by.x, by.y) < 1) continue
+        for (let step = 0; step <= 120; step += 1) {
+          const angle = step / 120 * Math.PI * 2
+          const x = cx + ax.x * Math.cos(angle) + by.x * Math.sin(angle)
+          const y = cy + ax.y * Math.cos(angle) + by.y * Math.sin(angle)
+          if (step === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+        continue
+      }
+      if (object.kind === 'conic') {
+        const points = object.pointIds.map((id) => geometryPoints.get(id))
+        if (points.some((point) => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y))) continue
+        const coefficients = fitConic(points as GeometryPoint[])
+        if (!coefficients) continue
+        const [a, b, c, d, e, f] = coefficients
+        const grid = sampleScalarGrid((x, y) => a * x * x + b * x * y + c * y * y + d * x + e * y + f, width, height, worldX, worldY)
+        for (const [x1, y1, x2, y2] of contourSegments(grid)) {
+          ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+        }
+        continue
+      }
+      if (object.kind === 'locus') {
+        const moving = geometryPoints.get(object.pointId); const center = geometryPoints.get(object.centerId)
+        if (!moving || !center) continue
+        const radius = Math.hypot(sx(moving.x) - sx(center.x), sy(moving.y) - sy(center.y))
+        if (radius < 1) continue
+        for (let step = 0; step <= 120; step += 1) {
+          const angle = step / 120 * Math.PI * 2
+          const x = sx(center.x) + radius * Math.cos(angle)
+          const y = sy(center.y) + radius * Math.sin(angle)
+          if (step === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+        }
+        ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([])
+        continue
+      }
+      if (object.kind === 'envelope') {
+        try {
+          ctx.setLineDash([5, 4])
+          let previous: { x: number; y: number } | null = null
+          for (const point of sampleLineEnvelope(object)) {
+            if (![point.x, point.y].every(Number.isFinite)) { previous = null; continue }
+            if (previous && Math.hypot(sx(point.x) - sx(previous.x), sy(point.y) - sy(previous.y)) < 40) {
+              ctx.beginPath(); ctx.moveTo(sx(previous.x), sy(previous.y)); ctx.lineTo(sx(point.x), sy(point.y)); ctx.stroke()
+            }
+            previous = point
+          }
+          ctx.setLineDash([])
+        } catch { ctx.setLineDash([]) }
+        continue
+      }
+      if (object.kind === 'polygon' || object.kind === 'transform') {
+        const vertices = object.kind === 'polygon' ? object.pointIds.map((id) => geometryPoints.get(id)).filter((point): point is GeometryPoint => Boolean(point)) : resolveGeometryPoints(object.id)
+        if (object.kind === 'transform' && object.sourceKind !== 'polygon') {
+          if (vertices.length < 2 || vertices.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) continue
+          const [start, end] = vertices
+          const dx = end.x - start.x; const dy = end.y - start.y; const length = Math.hypot(dx, dy)
+          if (length < 1e-10) continue
+          const extent = (width + height) / scale; const ux = dx / length; const uy = dy / length
+          const from = object.sourceKind === 'line' ? { x: start.x - ux * extent, y: start.y - uy * extent } : start
+          const to = object.sourceKind === 'line' || object.sourceKind === 'ray' ? { x: start.x + ux * extent, y: start.y + uy * extent } : end
+          ctx.moveTo(sx(from.x), sy(from.y)); ctx.lineTo(sx(to.x), sy(to.y)); ctx.stroke()
+          continue
+        }
+        if (vertices.length < 3) continue
+        if (vertices.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) continue
+        ctx.moveTo(sx(vertices[0].x), sy(vertices[0].y))
+        vertices.slice(1).forEach((point) => ctx.lineTo(sx(point.x), sy(point.y)))
+        ctx.closePath()
+        ctx.save()
+        ctx.globalAlpha = 0.13
+        ctx.fillStyle = object.color
+        ctx.fill()
+        ctx.restore()
+        ctx.stroke()
+        continue
+      }
+      const path = object as GeometryPath
+      const start = geometryPoints.get(path.startId)
+      const end = geometryPoints.get(path.endId)
+      if (!start || !end) continue
+      const dx = end.x - start.x
+      const dy = end.y - start.y
+      const length = Math.hypot(dx, dy)
+      if (length < 1e-10) continue
+      const unitX = dx / length
+      const unitY = dy / length
+      const extent = (width + height) / scale
+      const from = object.kind === 'line' ? { x: start.x - unitX * extent, y: start.y - unitY * extent } : start
+      const to = object.kind === 'line' || object.kind === 'ray'
+        ? { x: start.x + unitX * extent, y: start.y + unitY * extent }
+        : end
+      ctx.moveTo(sx(from.x), sy(from.y))
+      ctx.lineTo(sx(to.x), sy(to.y))
+      ctx.stroke()
+      if (object.kind === 'vector') {
+        const tipX = sx(end.x)
+        const tipY = sy(end.y)
+        const angle = Math.atan2(tipY - sy(start.y), tipX - sx(start.x))
+        ctx.beginPath()
+        ctx.moveTo(tipX, tipY)
+        ctx.lineTo(tipX - 11 * Math.cos(angle - Math.PI / 6), tipY - 11 * Math.sin(angle - Math.PI / 6))
+        ctx.moveTo(tipX, tipY)
+        ctx.lineTo(tipX - 11 * Math.cos(angle + Math.PI / 6), tipY - 11 * Math.sin(angle + Math.PI / 6))
+        ctx.stroke()
+      }
+    }
+
+    for (const object of visibleGeometry) {
+      if (object.kind !== 'transform' || !object.visible || object.sourceKind !== 'point') continue
+      const point = resolveGeometryPoints(object.id)[0]
+      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue
+      const x = sx(point.x); const y = sy(point.y)
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fillStyle = object.color; ctx.fill()
+      ctx.strokeStyle = palette.background; ctx.lineWidth = 1.5; ctx.stroke()
+      ctx.fillStyle = palette.labels; ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif'; ctx.fillText(point.label, x + 7, y - 7)
+    }
+
+    for (const point of geometryPoints.values()) {
+      if (!point.visible) continue
+      const x = sx(point.x)
+      const y = sy(point.y)
+      const selected = point.id === selectedPointId
+      ctx.beginPath()
+      ctx.arc(x, y, selected ? 6 : 4.5, 0, Math.PI * 2)
+      ctx.fillStyle = selected ? '#df7752' : point.color
+      ctx.fill()
+      ctx.lineWidth = 1.5
+      ctx.strokeStyle = palette.background
+      ctx.stroke()
+      ctx.fillStyle = palette.labels
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif'
+      ctx.fillText(point.label, x + 7, y - 7)
+    }
+
+    for (const measurement of visibleGeometry) {
+      if (measurement.kind !== 'measurement' || !measurement.visible) continue
+      let label = ''
+      let anchor: { x: number; y: number } | null = null
+      if (measurement.measure === 'distance' || measurement.measure === 'angle') {
+        const points = measurement.pointIds!.map((id) => geometryPoints.get(id))
+        if (points.some((point) => !point?.visible)) continue
+        const [first, second, third] = points as GeometryPoint[]
+        if (measurement.measure === 'distance') {
+          const length = Math.hypot(second.x - first.x, second.y - first.y)
+          label = `d(${first.label}, ${second.label}) = ${formatNumber(length, 2)}`
+          anchor = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 }
+        } else {
+          const firstVector = { x: first.x - second.x, y: first.y - second.y }
+          const secondVector = { x: third.x - second.x, y: third.y - second.y }
+          const product = Math.hypot(firstVector.x, firstVector.y) * Math.hypot(secondVector.x, secondVector.y)
+          if (product === 0) continue
+          const cosine = Math.max(-1, Math.min(1, (firstVector.x * secondVector.x + firstVector.y * secondVector.y) / product))
+          const degrees = Math.acos(cosine) * 180 / Math.PI
+          label = `∠${first.label}${second.label}${third.label} = ${formatNumber(degrees, 1)}°`
+          anchor = { x: second.x, y: second.y }
+        }
+      } else {
+        const polygon = visibleGeometry.find((object) => object.id === measurement.polygonId && (object.kind === 'polygon' || object.kind === 'transform' && object.sourceKind === 'polygon'))
+        if (!polygon || !polygon.visible) continue
+        const points = polygon.kind === 'polygon'
+          ? polygon.pointIds.map((id) => geometryPoints.get(id)).filter((point): point is GeometryPoint => Boolean(point?.visible))
+          : resolveGeometryPoints(polygon.id)
+        if (points.length < 3) continue
+        const perimeter = points.reduce((sum, point, index) => {
+          const next = points[(index + 1) % points.length]
+          return sum + Math.hypot(next.x - point.x, next.y - point.y)
+        }, 0)
+        const doubledArea = points.reduce((sum, point, index) => {
+          const next = points[(index + 1) % points.length]
+          return sum + point.x * next.y - next.x * point.y
+        }, 0)
+        const area = Math.abs(doubledArea) / 2
+        label = measurement.measure === 'perimeter' ? `Perimeter = ${formatNumber(perimeter, 2)}` : `Area = ${formatNumber(area, 2)}`
+        anchor = points.reduce((center, point) => ({ x: center.x + point.x / points.length, y: center.y + point.y / points.length }), { x: 0, y: 0 })
+      }
+      if (!anchor) continue
+      const textX = sx(anchor.x) + 9
+      const textY = sy(anchor.y) - 9
+      ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif'
+      const textWidth = ctx.measureText(label).width
+      ctx.fillStyle = palette.background
+      ctx.fillRect(textX - 4, textY - 13, textWidth + 8, 19)
+      ctx.strokeStyle = measurement.color
+      ctx.lineWidth = 1
+      ctx.strokeRect(textX - 4, textY - 13, textWidth + 8, 19)
+      ctx.fillStyle = palette.labels
+      ctx.fillText(label, textX, textY)
+    }
+
+    if (pendingVertices.length > 0 && geometryTool !== 'select') {
+      const draft = pendingVertices.map((vertex) => vertex.point)
+      ctx.save()
+      ctx.strokeStyle = '#df7752'
+      ctx.fillStyle = '#df7752'
+      ctx.lineWidth = 1.7
+      ctx.setLineDash([5, 4])
+      ctx.beginPath()
+      draft.forEach((point, index) => index === 0 ? ctx.moveTo(sx(point.x), sy(point.y)) : ctx.lineTo(sx(point.x), sy(point.y)))
+      if (cursor) ctx.lineTo(sx(cursor.x), sy(cursor.y))
+      if (geometryTool === 'polygon' && draft.length >= 3) ctx.closePath()
+      ctx.stroke()
+      ctx.setLineDash([])
+      draft.forEach((point) => {
+        ctx.beginPath()
+        ctx.arc(sx(point.x), sy(point.y), 5, 0, Math.PI * 2)
+        ctx.fill()
+      })
+      ctx.restore()
+    }
+
     for (const feature of analysis.features) {
       const x = sx(feature.x)
       const y = sy(feature.y)
       if (x < 0 || x > width || y < 0 || y > height) continue
       ctx.beginPath()
       ctx.arc(x, y, feature.kind === 'intersection' ? 5.5 : 4.5, 0, Math.PI * 2)
-      ctx.fillStyle = '#ffffff'
+      ctx.fillStyle = palette.point
       ctx.fill()
       ctx.lineWidth = 2.4
       ctx.strokeStyle = feature.color
@@ -308,14 +640,14 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
         ctx.setLineDash([])
         ctx.beginPath()
         ctx.arc(x, y, 6, 0, Math.PI * 2)
-        ctx.fillStyle = '#ffffff'
+        ctx.fillStyle = palette.point
         ctx.fill()
         ctx.lineWidth = 3
         ctx.stroke()
         ctx.restore()
       }
     }
-  }, [analysis.features, canvasRef, graphs, parameterA, size, trace, tracedGraph, tracedSlope, tracedY, viewport])
+  }, [analysis.features, canvasRef, cursor, darkMode, geometryTool, graphs, parameterA, pendingVertices, selectedPointId, size, trace, tracedGraph, tracedSlope, tracedY, viewport, visibleGeometry])
 
   function updateCursor(clientX: number, clientY: number) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -343,21 +675,337 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
     setTrace(nearest && nearest.distance <= 22 ? { graphId: nearest.graphId, x } : null)
   }
 
+  function worldPoint(clientX: number, clientY: number) {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    return {
+      x: viewport.centerX + (clientX - rect.left - rect.width / 2) / viewport.scale,
+      y: viewport.centerY - (clientY - rect.top - rect.height / 2) / viewport.scale,
+    }
+  }
+
+  function hitPoint(clientX: number, clientY: number): GeometryPoint | null {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    let nearest: { point: GeometryPoint; distance: number } | null = null
+    for (const object of visibleGeometry) {
+      if (object.kind !== 'point' || !object.visible) continue
+      const point = object
+      const px = rect.width / 2 + (point.x - viewport.centerX) * viewport.scale
+      const py = rect.height / 2 - (point.y - viewport.centerY) * viewport.scale
+      const distance = Math.hypot(px - (clientX - rect.left), py - (clientY - rect.top))
+      if (distance <= 12 && (!nearest || distance < nearest.distance)) nearest = { point, distance }
+    }
+    return nearest?.point ?? null
+  }
+
+  function hitPathIntersection(clientX: number, clientY: number): GeometryPoint | null {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const points = new Map(visibleGeometry.filter((object): object is GeometryPoint => object.kind === 'point').map((point) => [point.id, point]))
+    const paths = visibleGeometry.filter((object): object is GeometryPath => ['line', 'ray', 'segment', 'vector'].includes(object.kind) && object.visible)
+    let closest: { point: GeometryPoint; distance: number } | null = null
+    for (let first = 0; first < paths.length; first += 1) for (let second = first + 1; second < paths.length; second += 1) {
+      const coordinates = intersectGeometryPaths(paths[first], paths[second], points)
+      if (!coordinates) continue
+      const px = rect.width / 2 + (coordinates.x - viewport.centerX) * viewport.scale
+      const py = rect.height / 2 - (coordinates.y - viewport.centerY) * viewport.scale
+      const distance = Math.hypot(px - (clientX - rect.left), py - (clientY - rect.top))
+      if (distance > 12 || closest && distance >= closest.distance) continue
+      closest = { distance, point: { id: crypto.randomUUID(), kind: 'point', ...coordinates, color: '#df7752', label: 'I', visible: true, intersectionOf: [paths[first].id, paths[second].id] } }
+    }
+    return closest?.point ?? null
+  }
+
+  function hitPolygon(clientX: number, clientY: number) {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const localX = clientX - rect.left
+    const localY = clientY - rect.top
+    for (const polygon of [...geometry].reverse()) {
+      if (!polygon.visible || !(polygon.kind === 'polygon' || polygon.kind === 'transform' && polygon.sourceKind === 'polygon')) continue
+      const vertices = polygon.kind === 'polygon'
+        ? polygon.pointIds.map((id) => visibleGeometry.find((item): item is GeometryPoint => item.kind === 'point' && item.id === id)).filter((point): point is GeometryPoint => Boolean(point?.visible))
+        : resolveGeometryPointObjects(visibleGeometry, polygon.id)
+      let inside = false
+      for (let index = 0, previous = vertices.length - 1; index < vertices.length; previous = index, index += 1) {
+        const currentPoint = vertices[index]
+        const previousPoint = vertices[previous]
+        const currentX = rect.width / 2 + (currentPoint.x - viewport.centerX) * viewport.scale
+        const currentY = rect.height / 2 - (currentPoint.y - viewport.centerY) * viewport.scale
+        const previousX = rect.width / 2 + (previousPoint.x - viewport.centerX) * viewport.scale
+        const previousY = rect.height / 2 - (previousPoint.y - viewport.centerY) * viewport.scale
+        if ((currentY > localY) !== (previousY > localY) && localX < (previousX - currentX) * (localY - currentY) / (previousY - currentY) + currentX) inside = !inside
+      }
+      if (inside) return polygon
+    }
+    return null
+  }
+
+  function hitTransformTarget(clientX: number, clientY: number): GeometryObject | null {
+    const point = hitPoint(clientX, clientY)
+    if (point) return point
+    const polygon = hitPolygon(clientX, clientY)
+    if (polygon) return polygon
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    const px = clientX - rect.left; const py = clientY - rect.top
+    for (const path of [...geometry].reverse()) {
+      if (!['line', 'segment', 'ray', 'vector'].includes(path.kind) || !path.visible) continue
+      const pathObject = path as GeometryPath
+      const points = new Map(geometry.filter((item): item is GeometryPoint => item.kind === 'point').map((item) => [item.id, item]))
+      const start = points.get(pathObject.startId); const end = points.get(pathObject.endId)
+      if (!start || !end) continue
+      const ax = rect.width / 2 + (start.x - viewport.centerX) * viewport.scale
+      const ay = rect.height / 2 - (start.y - viewport.centerY) * viewport.scale
+      const bx = rect.width / 2 + (end.x - viewport.centerX) * viewport.scale
+      const by = rect.height / 2 - (end.y - viewport.centerY) * viewport.scale
+      const vx = bx - ax; const vy = by - ay; const length2 = vx * vx + vy * vy
+      let t = length2 ? ((px - ax) * vx + (py - ay) * vy) / length2 : 0
+      if (pathObject.kind === 'segment' || pathObject.kind === 'vector') t = Math.max(0, Math.min(1, t))
+      else if (pathObject.kind === 'ray') t = Math.max(0, t)
+      const distance = Math.hypot(px - (ax + t * vx), py - (ay + t * vy))
+      if (distance < 9) return pathObject
+    }
+    return null
+  }
+
+  function createTransform() {
+    const source = geometry.find((object) => object.id === selectedGeometryId)
+    if (!source || source.kind === 'measurement' || source.kind === 'circle' || source.kind === 'ellipse' || source.kind === 'conic' || source.kind === 'locus' || source.kind === 'envelope') return
+    const sourceKind = source.kind === 'transform' ? source.sourceKind : source.kind
+    const values = Object.fromEntries(Object.entries(transformValues).map(([key, value]) => [key, Number(value)])) as Record<keyof typeof transformValues, number>
+    if (Object.values(values).some((value) => !Number.isFinite(value))) return
+    const transformed: GeometryTransform = {
+      id: crypto.randomUUID(), kind: 'transform', sourceId: source.id, sourceKind, operation: transformOperation,
+      dx: values.dx, dy: values.dy, centerX: values.centerX, centerY: values.centerY,
+      angleDegrees: values.angleDegrees, scale: values.scale, radius: values.radius,
+      color: '#0c9cb5', visible: true,
+    }
+    onGeometryChange([...geometry, transformed])
+    setSelectedGeometryId(transformed.id)
+  }
+
+  function createEnvelope() {
+    const start = Number(envelopeInput.start); const end = Number(envelopeInput.end)
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return
+    try {
+      const envelope: GeometryEnvelope = { id: crypto.randomUUID(), kind: 'envelope', slopeExpression: envelopeInput.slope, interceptExpression: envelopeInput.intercept, start, end, color: '#805fc2', visible: true }
+      sampleLineEnvelope(envelope)
+      onGeometryChange([...geometry, envelope])
+      setGeometryTool('select')
+    } catch { /* Leave invalid family expressions in the fields for correction. */ }
+  }
+
+  function nextPointLabel(offset = 0): string {
+    const index = geometry.filter((object) => object.kind === 'point').length + offset
+    return index < 26 ? String.fromCharCode(65 + index) : `A${index - 25}`
+  }
+
+  function createGeometryPoint(x: number, y: number, labelOffset = 0): GeometryPoint {
+    return { id: crypto.randomUUID(), kind: 'point', x, y, color: '#286fc0', label: nextPointLabel(labelOffset), visible: true }
+  }
+
+  function createAt(clientX: number, clientY: number) {
+    if (geometryTool === 'envelope') return
+    if (geometryTool === 'transform') {
+      const target = hitTransformTarget(clientX, clientY)
+      setSelectedGeometryId(target?.id ?? null)
+      setSelectedPointId(target?.kind === 'point' ? target.id : null)
+      return
+    }
+    const position = worldPoint(clientX, clientY)
+    if (!position) return
+    if (geometryTool === 'point') {
+      const snapped = hitPoint(clientX, clientY)
+      if (snapped) { setSelectedPointId(snapped.id); return }
+      const intersection = hitPathIntersection(clientX, clientY)
+      if (intersection) { onGeometryChange([...geometry, intersection]); setSelectedPointId(intersection.id); return }
+      onGeometryChange([...geometry, createGeometryPoint(position.x, position.y)])
+      setSelectedPointId(null)
+      return
+    }
+    if (geometryTool === 'linked-point') {
+      const x = linkedValues[linkedXCell]; const y = linkedValues[linkedYCell]
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return
+      onGeometryChange([...geometry, { ...createGeometryPoint(x, y), xCell: linkedXCell, yCell: linkedYCell }])
+      return
+    }
+
+    if (geometryTool === 'circle') {
+      const snapped = hitPoint(clientX, clientY)
+      const point = snapped ?? createGeometryPoint(position.x, position.y, pendingVertices.filter((vertex) => vertex.isNew).length)
+      const vertex = { id: point.id, point, isNew: !snapped }
+      if (!pendingVertices.length) { setPendingVertices([vertex]); return }
+      const center = pendingVertices[0]
+      if (center.id === vertex.id) return
+      const circle: GeometryCircle = { id: crypto.randomUUID(), kind: 'circle', centerId: center.id, radiusPointId: vertex.id, color: '#286fc0', visible: true }
+      onGeometryChange([...geometry, ...(center.isNew ? [center.point] : []), ...(vertex.isNew ? [vertex.point] : []), circle])
+      setPendingVertices([])
+      return
+    }
+    if (geometryTool === 'ellipse') {
+      const snapped = hitPoint(clientX, clientY)
+      const point = snapped ?? createGeometryPoint(position.x, position.y, pendingVertices.filter((vertex) => vertex.isNew).length)
+      const vertex = { id: point.id, point, isNew: !snapped }
+      const next = [...pendingVertices, vertex]
+      if (next.some((item, index) => next.findIndex((other) => other.id === item.id) !== index)) return
+      if (next.length < 3) { setPendingVertices(next); return }
+      const [center, axisX, axisY] = next
+      const ellipse: GeometryEllipse = { id: crypto.randomUUID(), kind: 'ellipse', centerId: center.id, axisXId: axisX.id, axisYId: axisY.id, color: '#286fc0', visible: true }
+      onGeometryChange([...geometry, ...next.filter((item) => item.isNew).map((item) => item.point), ellipse])
+      setPendingVertices([])
+      return
+    }
+    if (geometryTool === 'conic') {
+      const snapped = hitPoint(clientX, clientY)
+      const point = snapped ?? createGeometryPoint(position.x, position.y, pendingVertices.filter((vertex) => vertex.isNew).length)
+      const vertex = { id: point.id, point, isNew: !snapped }
+      const next = [...pendingVertices, vertex]
+      if (next.some((item, index) => next.findIndex((other) => other.id === item.id) !== index)) return
+      if (next.length < 5) { setPendingVertices(next); return }
+      if (!fitConic(next.map((item) => item.point))) { setPendingVertices([]); return }
+      const conic: GeometryConic = { id: crypto.randomUUID(), kind: 'conic', pointIds: next.map((item) => item.id), color: '#286fc0', visible: true }
+      onGeometryChange([...geometry, ...next.filter((item) => item.isNew).map((item) => item.point), conic])
+      setPendingVertices([])
+      return
+    }
+    if (geometryTool === 'locus') {
+      const point = hitPoint(clientX, clientY)
+      if (!point || pendingVertices.some((vertex) => vertex.id === point.id)) return
+      const next = [...pendingVertices, { id: point.id, point, isNew: false }]
+      if (next.length < 2) { setPendingVertices(next); return }
+      const locus: GeometryLocus = { id: crypto.randomUUID(), kind: 'locus', pointId: next[0].id, centerId: next[1].id, color: '#df7752', visible: true }
+      onGeometryChange([...geometry, locus])
+      setPendingVertices([])
+      return
+    }
+
+    if (geometryTool === 'distance' || geometryTool === 'angle') {
+      const point = hitPoint(clientX, clientY)
+      if (!point || pendingVertices.some((vertex) => vertex.id === point.id)) return
+      const next = [...pendingVertices, { id: point.id, point, isNew: false }]
+      const needed = geometryTool === 'distance' ? 2 : 3
+      if (next.length < needed) { setPendingVertices(next); return }
+      onGeometryChange([...geometry, {
+        id: crypto.randomUUID(), kind: 'measurement', measure: geometryTool,
+        pointIds: next.map((vertex) => vertex.id), color: '#df7752', visible: true,
+      }])
+      setPendingVertices([])
+      return
+    }
+
+    if (geometryTool === 'perimeter' || geometryTool === 'area') {
+      const polygon = hitPolygon(clientX, clientY)
+      if (!polygon) return
+      onGeometryChange([...geometry, {
+        id: crypto.randomUUID(), kind: 'measurement', measure: geometryTool,
+        polygonId: polygon.id, color: '#df7752', visible: true,
+      }])
+      return
+    }
+
+    if (geometryTool === 'select') return
+    const snapped = hitPoint(clientX, clientY)
+    const point = snapped ?? createGeometryPoint(position.x, position.y, pendingVertices.filter((vertex) => vertex.isNew).length)
+    if (pendingVertices.some((vertex) => vertex.id === point.id)) return
+    const vertex = { id: point.id, point, isNew: !snapped }
+    if (geometryTool === 'polygon') {
+      setPendingVertices((current) => [...current, vertex])
+      return
+    }
+    if (pendingVertices.length === 0) {
+      setPendingVertices([vertex])
+      return
+    }
+    const first = pendingVertices[0]
+    const endpoints = [...pendingVertices.filter((item) => item.isNew).map((item) => item.point), ...(vertex.isNew ? [vertex.point] : [])]
+    const path: GeometryPath = {
+      id: crypto.randomUUID(),
+      kind: geometryTool,
+      startId: first.id,
+      endId: vertex.id,
+      color: '#286fc0',
+      visible: true,
+    }
+    onGeometryChange([...geometry, ...endpoints, path])
+    setPendingVertices([])
+    setSelectedPointId(null)
+  }
+
+  function finishPolygon() {
+    const distinct = pendingVertices.filter((vertex, index, all) => all.findIndex((item) => item.id === vertex.id) === index)
+    if (distinct.length < 3) return
+    const points = distinct.filter((vertex) => vertex.isNew).map((vertex) => vertex.point)
+    onGeometryChange([...geometry, ...points, {
+      id: crypto.randomUUID(),
+      kind: 'polygon',
+      pointIds: distinct.map((vertex) => vertex.id),
+      color: '#286fc0',
+      visible: true,
+    }])
+    setPendingVertices([])
+  }
+
+  function deleteSelectedPoint() {
+    if (!selectedPointId) return
+    const removedIds = new Set([selectedPointId])
+    geometry.forEach((object) => {
+      if ((object.kind === 'line' || object.kind === 'segment' || object.kind === 'ray' || object.kind === 'vector') && (object.startId === selectedPointId || object.endId === selectedPointId)) removedIds.add(object.id)
+      if (object.kind === 'polygon' && object.pointIds.includes(selectedPointId)) removedIds.add(object.id)
+      if (object.kind === 'circle' && (object.centerId === selectedPointId || object.radiusPointId === selectedPointId)) removedIds.add(object.id)
+      if (object.kind === 'ellipse' && [object.centerId, object.axisXId, object.axisYId].includes(selectedPointId)) removedIds.add(object.id)
+      if (object.kind === 'conic' && object.pointIds.includes(selectedPointId)) removedIds.add(object.id)
+      if (object.kind === 'locus' && (object.pointId === selectedPointId || object.centerId === selectedPointId)) removedIds.add(object.id)
+    })
+    let changed = true
+    while (changed) {
+      changed = false
+      geometry.forEach((object) => {
+        if (object.kind === 'transform' && removedIds.has(object.sourceId) && !removedIds.has(object.id)) { removedIds.add(object.id); changed = true }
+      })
+    }
+    onGeometryChange(geometry.filter((object) => {
+      if (removedIds.has(object.id)) return false
+      if (object.kind !== 'measurement') return true
+      return object.measure === 'distance' || object.measure === 'angle'
+        ? !object.pointIds?.some((id) => removedIds.has(id))
+        : !removedIds.has(object.polygonId ?? '')
+    }))
+    setSelectedPointId(null)
+  }
+
   return (
     <div className="graph-stage" ref={containerRef}>
       <canvas
         ref={canvasRef}
-        className="graph-canvas"
+        className={`graph-canvas ${geometryTool === 'select' ? '' : 'geometry-cursor'}`}
+        tabIndex={0}
         aria-label="Interactive two-dimensional graph. Drag to pan, scroll to zoom, or click a function to trace it."
         role="img"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId)
-          dragRef.current = { x: event.clientX, y: event.clientY, viewport }
+          if (geometryTool !== 'select') { dragRef.current = null; return }
+          const point = hitPoint(event.clientX, event.clientY)
+          if (point) {
+            const source = geometry.find((object) => object.id === point.id)
+            if (source?.kind === 'point' && (source.xCell && source.yCell || source.intersectionOf)) { setSelectedPointId(point.id); return }
+            dragRef.current = { kind: 'point', id: point.id, x: event.clientX, y: event.clientY }
+            setSelectedPointId(point.id)
+            return
+          }
+          setSelectedPointId(null)
+          dragRef.current = { kind: 'pan', x: event.clientX, y: event.clientY, viewport }
         }}
         onPointerMove={(event) => {
           updateCursor(event.clientX, event.clientY)
           if (!dragRef.current) return
           const drag = dragRef.current
+          if (drag.kind === 'point') {
+            const position = worldPoint(event.clientX, event.clientY)
+            if (position && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 2) setPreviewPoint({ id: drag.id, ...position })
+            return
+          }
           setViewport({
             ...drag.viewport,
             centerX: drag.viewport.centerX - (event.clientX - drag.x) / drag.viewport.scale,
@@ -366,12 +1014,20 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
         }}
         onPointerUp={(event) => {
           const drag = dragRef.current
-          if (drag && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) {
+          if (drag?.kind === 'point') {
+            const position = worldPoint(event.clientX, event.clientY)
+            if (position && previewPoint?.id === drag.id) {
+              onGeometryChange(geometry.map((object) => object.kind === 'point' && object.id === drag.id ? { ...object, ...position } : object))
+            }
+            setPreviewPoint(null)
+          } else if (drag?.kind === 'pan' && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) {
             selectTrace(event.clientX, event.clientY)
+          } else if (!drag && geometryTool !== 'select') {
+            createAt(event.clientX, event.clientY)
           }
           dragRef.current = null
         }}
-        onPointerCancel={() => { dragRef.current = null }}
+        onPointerCancel={() => { dragRef.current = null; setPreviewPoint(null) }}
         onPointerLeave={() => setCursor(null)}
         onWheel={(event) => {
           event.preventDefault()
@@ -388,7 +1044,38 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
             }
           })
         }}
+        onKeyDown={(event) => {
+          if ((event.key === 'Backspace' || event.key === 'Delete') && selectedPointId) {
+            event.preventDefault()
+            deleteSelectedPoint()
+          }
+        }}
       />
+      <div className="geometry-toolbar" role="toolbar" aria-label="Geometry tools">
+        {(['select', 'point', 'linked-point', 'line', 'segment', 'ray', 'vector', 'polygon', 'circle', 'ellipse', 'conic', 'locus', 'envelope', 'distance', 'angle', 'perimeter', 'area', 'transform'] as GeometryTool[]).map((tool) => (
+          <button key={tool} type="button" className={geometryTool === tool ? 'active' : ''} aria-label={tool === 'linked-point' ? 'Sheet point' : tool} data-tooltip={tool === 'linked-point' ? 'Sheet point' : tool[0].toUpperCase() + tool.slice(1)} aria-pressed={geometryTool === tool} onClick={() => { setGeometryTool(tool); setPendingVertices([]) }}>
+            {tool === 'select' ? <MousePointer2 /> : tool === 'point' ? <CircleDot /> : tool === 'linked-point' ? <Link /> : ['line', 'segment', 'ray', 'vector', 'perimeter', 'area'].includes(tool) ? <ConstructionGlyph kind={tool as 'line' | 'segment' | 'ray' | 'vector' | 'perimeter' | 'area'} /> : tool === 'polygon' ? <Pentagon /> : tool === 'circle' ? <Circle /> : tool === 'ellipse' ? <Ellipse /> : tool === 'conic' ? <DraftingCompass /> : tool === 'locus' ? <Orbit /> : tool === 'envelope' ? <Waves /> : tool === 'distance' ? <Ruler /> : tool === 'angle' ? <Triangle /> : tool === 'transform' ? <Move /> : <Crosshair />}
+          </button>
+        ))}
+        {geometryTool === 'linked-point' && <><label> x cell <input value={linkedXCell} onChange={(event) => setLinkedXCell(event.target.value.toUpperCase())} /></label><label> y cell <input value={linkedYCell} onChange={(event) => setLinkedYCell(event.target.value.toUpperCase())} /></label></>}
+        {geometryTool === 'envelope' && <><label>m(t)<input aria-label="Line family slope m of t" value={envelopeInput.slope} onChange={(event) => setEnvelopeInput((current) => ({ ...current, slope: event.target.value }))} /></label><label>b(t)<input aria-label="Line family intercept b of t" value={envelopeInput.intercept} onChange={(event) => setEnvelopeInput((current) => ({ ...current, intercept: event.target.value }))} /></label><label>t from<input aria-label="Envelope parameter start" type="number" value={envelopeInput.start} onChange={(event) => setEnvelopeInput((current) => ({ ...current, start: event.target.value }))} /></label><label>to<input aria-label="Envelope parameter end" type="number" value={envelopeInput.end} onChange={(event) => setEnvelopeInput((current) => ({ ...current, end: event.target.value }))} /></label><button type="button" className="geometry-finish" onClick={createEnvelope}>Create envelope</button></>}
+        {geometryTool === 'transform' && <>
+          <select aria-label="Transformation" value={transformOperation} onChange={(event) => setTransformOperation(event.target.value as TransformOperation)}>
+            <option value="translate">Translate</option><option value="reflect-x">Reflect across x-axis</option><option value="reflect-y">Reflect across y-axis</option><option value="reflect-origin">Reflect across origin</option><option value="rotate">Rotate</option><option value="dilate">Dilate</option><option value="invert">Invert in circle</option>
+          </select>
+          {transformOperation === 'translate' && <><label>Δx <input aria-label="Horizontal translation" value={transformValues.dx} onChange={(event) => setTransformValues({ ...transformValues, dx: event.target.value })} /></label><label>Δy <input aria-label="Vertical translation" value={transformValues.dy} onChange={(event) => setTransformValues({ ...transformValues, dy: event.target.value })} /></label></>}
+          {['rotate', 'dilate', 'invert'].includes(transformOperation) && <><label>Center x <input aria-label="Center x coordinate" value={transformValues.centerX} onChange={(event) => setTransformValues({ ...transformValues, centerX: event.target.value })} /></label><label>y <input aria-label="Center y coordinate" value={transformValues.centerY} onChange={(event) => setTransformValues({ ...transformValues, centerY: event.target.value })} /></label></>}
+          {transformOperation === 'rotate' && <label>° <input aria-label="Rotation angle in degrees" value={transformValues.angleDegrees} onChange={(event) => setTransformValues({ ...transformValues, angleDegrees: event.target.value })} /></label>}
+          {transformOperation === 'dilate' && <label>Factor <input aria-label="Dilation factor" value={transformValues.scale} onChange={(event) => setTransformValues({ ...transformValues, scale: event.target.value })} /></label>}
+          {transformOperation === 'invert' && <label>Radius <input aria-label="Inversion circle radius" value={transformValues.radius} onChange={(event) => setTransformValues({ ...transformValues, radius: event.target.value })} /></label>}
+          <button type="button" className="geometry-finish" disabled={!selectedGeometryId} onClick={createTransform}>Create copy</button>
+          <span className="geometry-hint">{selectedGeometryId ? `Selected: ${geometry.find((item) => item.id === selectedGeometryId)?.kind ?? 'object'}` : 'Click a point, path, or polygon'}</span>
+        </>}
+        {geometryTool === 'polygon' && pendingVertices.length > 0 && <button type="button" className="geometry-finish" onClick={finishPolygon} disabled={pendingVertices.length < 3}>Finish polygon</button>}
+        {pendingVertices.length > 0 && <button type="button" className="geometry-cancel" onClick={() => setPendingVertices([])} aria-label="Cancel construction">Cancel</button>}
+        {selectedPointId && <button type="button" className="geometry-delete" onClick={deleteSelectedPoint} aria-label="Delete selected point and dependent objects">Delete point</button>}
+        {geometryTool !== 'select' && geometryTool !== 'transform' && geometryTool !== 'envelope' && <span className="geometry-hint">{geometryTool === 'point' ? 'Click to add a point; snap near intersections' : geometryTool === 'linked-point' ? 'Click to add a point linked to these sheet cells' : geometryTool === 'conic' ? `Select five points · ${pendingVertices.length}/5` : geometryTool === 'ellipse' ? `Select center, x-axis point, and y-axis point · ${pendingVertices.length}/3` : geometryTool === 'locus' ? `Select moving point and rotation center · ${pendingVertices.length}/2` : geometryTool === 'polygon' ? `${pendingVertices.length} vertices · finish at 3 or more` : geometryTool === 'distance' ? `Select ${pendingVertices.length}/2 points` : geometryTool === 'angle' ? `Select ${pendingVertices.length}/3 points` : geometryTool === 'area' || geometryTool === 'perimeter' ? 'Click a polygon' : pendingVertices.length ? 'Click the second endpoint' : 'Click two endpoints'}</span>}
+      </div>
       <div className="graph-controls" aria-label="Graph controls">
         <button type="button" onClick={() => setViewport((current) => ({ ...current, scale: Math.min(maxScale, current.scale * buttonZoomFactor) }))} aria-label="Zoom in">+</button>
         <button type="button" onClick={() => setViewport((current) => ({ ...current, scale: Math.max(minScale, current.scale / buttonZoomFactor) }))} aria-label="Zoom out">−</button>
@@ -405,7 +1092,7 @@ export function Graph2D({ graphs, parameterA, canvasRef }: Props) {
               {analysis.features.slice(0, 18).map((feature, index) => (
                 <button key={`${feature.kind}-${feature.graphId}-${index}`} type="button" onClick={() => setTrace({ graphId: feature.graphId, x: feature.x })}>
                   <span className="analysis-dot" style={{ backgroundColor: feature.color }} aria-hidden="true" />
-                  <span className="analysis-result-name">{feature.kind === 'root' ? 'Root' : feature.kind === 'minimum' ? 'Minimum' : feature.kind === 'maximum' ? 'Maximum' : 'Intersection'} <small>{feature.label}</small></span>
+                  <span className="analysis-result-name">{feature.kind === 'root' ? 'x-intercept' : feature.kind === 'y-intercept' ? 'y-intercept' : feature.kind === 'minimum' ? 'Minimum' : feature.kind === 'maximum' ? 'Maximum' : feature.kind === 'inflection' ? 'Inflection' : 'Intersection'} <small>{feature.label}</small></span>
                   <span className="analysis-coordinates">({formatNumber(feature.x, 2)}, {formatNumber(feature.y, 2)})</span>
                 </button>
               ))}

@@ -38,32 +38,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 }
 
 .brand { gap: 12px; min-width: 0; }
-.brand-mark {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  position: relative;
-  border-radius: 9px;
-  background: #234f77;
-  overflow: hidden;
-}
-.brand-mark::before, .brand-mark::after {
-  content: "";
-  position: absolute;
-  background: #7da8cf;
-  opacity: .58;
-}
-.brand-mark::before { width: 1px; height: 100%; left: 45%; }
-.brand-mark::after { width: 100%; height: 1px; top: 54%; }
-.brand-mark span {
-  z-index: 1;
-  width: 21px;
-  height: 15px;
-  border-bottom: 2.5px solid #fff;
-  border-radius: 0 0 100% 45%;
-  transform: translateY(-1px) rotate(-20deg);
-}
+.brand-mark { width: 34px; height: 34px; display: block; object-fit: contain; flex: 0 0 auto; }
 .brand-name { color: #18334d; font-weight: 750; font-size: 18px; letter-spacing: -.5px; }
 .brand-divider { height: 22px; width: 1px; background: #dae3eb; margin: 0 2px 0 5px; }
 .brand-subtitle { color: #7b8b9c; font-size: 13px; white-space: nowrap; }
@@ -192,12 +167,31 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 
 .parameter-panel { border-top: 1px solid #e7edf2; border-bottom: 1px solid #e7edf2; padding: 21px 24px 25px; }
 .parameter-head { justify-content: space-between; color: #2e455a; font-size: 13px; font-weight: 700; }
+.parameter-head-actions, .parameter-value { display: flex; align-items: center; gap: 9px; }
+.parameter-head-actions button { display: inline-flex; align-items: center; gap: 3px; border: 1px solid #cfdfeb; border-radius: 6px; background: #fff; color: #286b9a; padding: 5px 7px; font-size: 11px; font-weight: 650; }
+.parameter-head-actions select { border: 1px solid #cfdfeb; border-radius: 6px; background: #fff; color: #286b9a; padding: 5px 6px; font-size: 12px; font-weight: 700; }
+.parameter-head-actions button:hover { background: #edf5fa; }
+.parameter-head-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .parameter-count { color: #98a7b4; font-size: 11px; font-weight: 500; }
-.parameter-label { justify-content: space-between; margin-top: 23px; }
+.parameter-item { padding-top: 16px; }
+.parameter-item + .parameter-item { margin-top: 11px; border-top: 1px solid #e7edf2; }
+.parameter-label { justify-content: space-between; }
 .parameter-label label { font-family: Georgia, serif; font-style: italic; color: #256b9e; font-size: 19px; }
 .parameter-label output { border: 1px solid #dce7ee; background: #fff; border-radius: 5px; min-width: 43px; padding: 5px 7px; text-align: center; font-size: 12px; font-weight: 600; color: #4b6071; }
-.parameter-slider { width: 100%; margin: 19px 0 4px; accent-color: #2878b2; cursor: pointer; }
+.parameter-remove { display: grid; place-items: center; width: 27px; height: 27px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #8a9aa8; }
+.parameter-remove:hover { background: #f7eaea; color: #a74c45; }
+.parameter-slider { width: 100%; margin: 12px 0 4px; accent-color: #2878b2; cursor: pointer; }
 .slider-ends { justify-content: space-between; color: #9cacb9; font-size: 10.5px; }
+.parameter-settings { margin-top: 9px; color: #708698; font-size: 11px; }
+.parameter-settings summary { display: inline-block; cursor: pointer; list-style: none; }
+.parameter-settings summary::-webkit-details-marker { display: none; }
+.parameter-settings summary::before { content: '▸'; margin-right: 5px; }
+.parameter-settings[open] summary::before { content: '▾'; }
+.parameter-settings form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
+.parameter-settings form label { min-width: 0; color: #6f8394; font-size: 10px; }
+.parameter-settings form input { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 5px; border: 1px solid #d7e1e9; border-radius: 5px; background: #fff; color: #344d60; font: inherit; }
+.parameter-settings form button { grid-column: 1 / -1; justify-self: start; border: 0; border-radius: 5px; padding: 5px 10px; background: #e6f0f8; color: #276b9b; font-size: 11px; font-weight: 650; }
+.parameter-settings p { margin: 6px 0 0; color: #b34d45; }
 .sidebar-footer { justify-content: space-between; gap: 10px; margin-top: auto; padding: 18px 23px; color: #a0adba; font-size: 11px; }
 .sidebar-footer button { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; padding: 0; color: #768da1; font-size: 11.5px; }
 .sidebar-footer button:hover { color: #295f8b; }
@@ -205,26 +199,115 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .visual-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: #fff; }
 .view-toolbar { height: 62px; flex: 0 0 62px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 22px; border-bottom: 1px solid #e5ebf0; background: #fff; }
 .view-switch { background: #f0f4f7; border-radius: 8px; padding: 4px; gap: 2px; }
-.view-switch button { display: flex; align-items: center; justify-content: center; gap: 8px; height: 31px; border: 0; background: transparent; color: #788a9a; padding: 0 13px; border-radius: 6px; font-weight: 650; font-size: 12px; white-space: nowrap; }
+.view-switch button { position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 34px; border: 0; background: transparent; color: #788a9a; padding: 0; border-radius: 6px; font-weight: 650; font-size: 12px; white-space: nowrap; }
 .view-switch button.active { background: #fff; color: #285e87; box-shadow: 0 1px 4px rgba(40, 75, 105, .1); }
+.view-switch button:focus-visible, .geometry-toolbar button:focus-visible { outline: 2px solid #3a8dbd; outline-offset: 2px; }
+[data-tooltip]::after { content: attr(data-tooltip); position: absolute; z-index: 20; left: 50%; top: calc(100% + 9px); transform: translate(-50%, -3px); opacity: 0; visibility: hidden; pointer-events: none; padding: 6px 9px; border: 1px solid #dce4ea; border-radius: 6px; background: #fff; color: #30495c; box-shadow: 0 4px 12px rgba(20, 38, 52, .13); font-size: 11px; font-weight: 600; line-height: 1.2; white-space: nowrap; transition: opacity .12s ease, transform .12s ease, visibility .12s; }
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
 .toolbar-right { gap: 19px; }
 .graph-count { color: #92a1ae; font-size: 11.5px; white-space: nowrap; }
 .export-image { display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: #536f86; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .export-image:hover { color: #225f8d; }
 .graph-wrap { flex: 1 1 auto; min-height: 350px; position: relative; }
 .math-tools-view { height: 100%; overflow-y: auto; padding: 34px clamp(22px, 4vw, 56px) 48px; background: #f9fbfd; }
-.math-tools-intro { max-width: 780px; margin: 0 auto 26px; }
-.tools-overline { color: #5480a0; font-size: 11px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
-.math-tools-intro h2 { margin: 8px 0; color: #213c52; font-size: 25px; letter-spacing: -.6px; }
-.math-tools-intro p { margin: 0; max-width: 570px; color: #718698; font-size: 13px; line-height: 1.55; }
-.math-tools-grid { max-width: 780px; margin: 0 auto; display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px; align-items: start; }
-.math-tool-list { display: grid; gap: 4px; }
-.math-tool-list button { text-align: left; border: 1px solid transparent; border-radius: 7px; padding: 10px 12px; background: transparent; color: #60778a; font-size: 12.5px; font-weight: 600; }
+.spreadsheet-view { height: 100%; overflow: auto; padding: 28px clamp(14px, 2vw, 30px); background: #f8fafc; }
+.spreadsheet-heading { max-width: 1400px; margin: 0 auto 18px; }
+.spreadsheet-heading h2 { margin: 6px 0; color: #213c52; font-size: 23px; }
+.spreadsheet-heading p { margin: 0; color: #718698; font-size: 12px; }
+.spreadsheet-heading code { color: #285f8e; }
+.spreadsheet-tabs { max-width: 1400px; margin: 0 auto 12px; display: flex; gap: 5px; border-bottom: 1px solid #dfe8ef; }
+.spreadsheet-tabs button { padding: 8px 12px; border: 0; border-radius: 6px 6px 0 0; background: transparent; color: #6a7f90; font-size: 11px; }
+.spreadsheet-tabs button.active { background: #fff; color: #285f8e; box-shadow: 0 -2px #286fc0 inset; }
+.spreadsheet-tabs button:last-child { margin-left: auto; }
+.spreadsheet-layout { max-width: 1400px; margin: auto; display: grid; grid-template-columns: minmax(420px, 1.3fr) minmax(300px, .8fr); gap: 16px; align-items: start; }
+.spreadsheet-statistics { max-width: 1400px; margin: 16px auto 0; }
+.probability-card { padding: 19px; border: 1px solid #dfe8ef; border-radius: 10px; background: #fff; box-shadow: 0 3px 14px rgba(40, 74, 100, .04); }
+.inference-card { margin-top: 14px; padding: 19px; border: 1px solid #dfe8ef; border-radius: 10px; background: #fff; box-shadow: 0 3px 14px rgba(40, 74, 100, .04); }
+.probability-heading h3 { margin: 5px 0; color: #2b4559; font-size: 15px; }
+.probability-heading p { margin: 0; color: #8595a2; font-size: 11px; }
+.probability-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin-top: 15px; }
+.probability-fields label { display: grid; gap: 5px; min-width: 120px; color: #718698; font-size: 10.5px; }
+.probability-fields input, .probability-fields select { width: 100%; min-height: 32px; padding: 6px 8px; border: 1px solid #d9e3ea; border-radius: 6px; background: #fff; color: #435c70; font-size: 11px; }
+.probability-fields button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 6px; background: #286b9a; color: #fff; font-size: 11px; font-weight: 700; }
+.anova-groups { display: flex; flex-wrap: wrap; gap: 8px 12px; min-width: 220px; margin: 0; padding: 7px 10px 9px; border: 1px solid #d9e3ea; border-radius: 6px; }
+.anova-groups legend { padding: 0 4px; color: #718698; font-size: 10px; }
+.anova-groups label { display: flex; align-items: center; gap: 4px; min-width: auto; color: #526b7e; }
+.anova-groups input { width: auto; min-height: auto; accent-color: #286b9a; }
+.probability-note { margin: 11px 0 0; color: #8595a2; font-size: 10.5px; line-height: 1.5; }
+.probability-error { margin: 10px 0 0; color: #b64e49; font-size: 11px; }
+.probability-result { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 13px; }
+.probability-result > div { display: grid; gap: 4px; min-width: 190px; padding: 11px 13px; border: 1px solid #e0e9ef; border-radius: 7px; background: #f7fafc; }
+.probability-result span { color: #8595a2; font-size: 9px; }
+.probability-result strong { color: #557187; font-size: 10px; }
+.probability-result b { color: #285f8e; font-size: 14px; }
+.inference-result { display: grid; gap: 6px; margin-top: 13px; padding: 12px; border: 1px solid #dce8ee; border-radius: 7px; background: #f7fafc; }
+.inference-result > span, .inference-result small { color: #7b8d9b; font-size: 10px; line-height: 1.45; }
+.inference-result strong { color: #285f8e; font-size: 13px; }
+.spreadsheet-grid-card, .spreadsheet-chart-card { min-width: 0; border: 1px solid #dfe8ef; border-radius: 10px; background: #fff; box-shadow: 0 3px 14px rgba(40, 74, 100, .04); }
+.spreadsheet-scroll { overflow: auto; max-height: min(62vh, 660px); }
+.spreadsheet-grid { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11px; }
+.spreadsheet-grid th, .spreadsheet-grid td { position: relative; height: 31px; border-right: 1px solid #e8edf1; border-bottom: 1px solid #e8edf1; }
+.spreadsheet-grid thead th, .spreadsheet-grid tbody th { width: 34px; background: #f3f6f8; color: #718393; font-weight: 650; text-align: center; }
+.spreadsheet-grid td input { width: 100%; height: 30px; padding: 0 7px; border: 1px solid transparent; outline: 0; background: transparent; color: #324a5c; font: inherit; }
+.spreadsheet-grid td input:focus { position: relative; z-index: 1; border-color: #5793bd; background: #f8fcff; box-shadow: inset 0 0 0 1px #5793bd; }
+.spreadsheet-grid td.cell-error { background: #fff7f5; }
+.cell-error-tip { position: absolute; z-index: 4; top: 100%; left: 0; width: max-content; max-width: 220px; padding: 6px 8px; border-radius: 5px; background: #8e3f37; color: #fff; font-size: 10px; }
+.spreadsheet-note { margin: 0; padding: 10px 12px; border-top: 1px solid #e8edf1; color: #8293a0; font-size: 10.5px; line-height: 1.45; }
+.spreadsheet-chart-card { padding: 17px; }
+.spreadsheet-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.spreadsheet-card-heading h3 { margin: 0 0 4px; color: #2b4559; font-size: 14px; }
+.spreadsheet-card-heading p, .spreadsheet-card-heading > span { margin: 0; color: #8595a2; font-size: 10.5px; }
+.regression-picker { display: flex; align-items: center; gap: 9px; margin-top: 13px; color: #718698; font-size: 10.5px; }
+.regression-picker select { padding: 6px 8px; border: 1px solid #d9e3ea; border-radius: 6px; background: #fff; color: #435c70; font-size: 11px; }
+.spreadsheet-chart-options { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.spreadsheet-chart-options label { display: flex; align-items: center; gap: 7px; color: #718698; font-size: 10.5px; }
+.spreadsheet-chart-options select { padding: 6px 8px; border: 1px solid #d9e3ea; border-radius: 6px; background: #fff; color: #435c70; font-size: 11px; }
+.spreadsheet-chart { display: block; width: 100%; margin-top: 10px; overflow: visible; }
+.distribution-plot { display: block; width: 100%; margin-top: 14px; overflow: visible; }
+.distribution-density { fill: none; stroke: #286fc0; stroke-width: 2.5; }
+.distribution-bar { fill: #286fc0; opacity: .72; }
+.chart-axis { stroke: #c5d0d8; stroke-width: 1.2; }
+.chart-fit { fill: none; stroke: #df7752; stroke-width: 2.5; }
+.chart-dot { fill: #286fc0; stroke: #fff; stroke-width: 2; }
+.chart-bar { fill: #438bb6; opacity: .82; }
+.chart-label { fill: #80919e; font-size: 9px; }
+.box-whisker, .box-median { stroke: #56758c; stroke-width: 2; }
+.box-range { fill: #b9d8e9; stroke: #438bb6; stroke-width: 1.5; }
+.box-median { stroke: #df7752; stroke-width: 2.5; }
+.stem-leaf { display: grid; gap: 5px; margin-top: 13px; padding: 12px; border-radius: 7px; background: #f3f7fa; color: #526b7e; font: 12px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.stem-leaf > div { display: grid; grid-template-columns: 55px 1fr; gap: 10px; }
+.stem-leaf small { margin-top: 5px; color: #8293a0; font-family: inherit; font-size: 10px; line-height: 1.4; }
+.residual-heading { margin-top: 14px; padding-top: 13px; border-top: 1px solid #edf1f4; }
+.residual-chart { margin-top: 2px; }
+.chart-zero { stroke: #9aa9b4; stroke-width: 1.2; stroke-dasharray: 5 4; }
+.chart-residual { fill: #29967a; stroke: #fff; stroke-width: 1.5; }
+.residual-values { display: flex; flex-wrap: wrap; gap: 5px 9px; color: #728695; font-size: 9.5px; }
+.residual-values strong { color: #526b7e; }
+.spreadsheet-chart-empty { display: grid; min-height: 200px; place-items: center; padding: 24px; color: #8495a2; font-size: 12px; text-align: center; }
+.regression-summary { display: grid; gap: 5px; margin-top: 9px; padding: 11px; border-radius: 7px; background: #f3f7fa; }
+.regression-summary span, .regression-summary small { color: #80919e; font-size: 10px; }
+.regression-summary strong { color: #385b75; font-size: 12px; }
+.math-tools-intro { max-width: 920px; margin: 0 auto 26px; }
+.math-tools-intro h2 { margin: 0 0 8px; color: #213c52; font-size: 25px; letter-spacing: -.6px; }
+.math-tools-intro p { margin: 0; max-width: 620px; color: #60778a; font-size: 13px; line-height: 1.55; }
+.math-tools-grid { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 22px; align-items: start; }
+.math-tool-list { display: grid; gap: 18px; max-height: min(690px, calc(100vh - 245px)); overflow-y: auto; padding: 2px 8px 6px 2px; scrollbar-width: thin; }
+.math-tool-group { display: grid; gap: 3px; }
+.math-tool-group + .math-tool-group { padding-top: 16px; border-top: 1px solid #e2eaf0; }
+.math-tool-group h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 0 9px; color: #526d81; font-size: 11px; font-weight: 750; letter-spacing: .01em; }
+.math-tool-group h3 svg { color: #668ca7; }
+.math-tool-list button { display: flex; align-items: center; gap: 10px; min-height: 38px; text-align: left; border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; background: transparent; color: #4e6578; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.math-tool-list button svg { flex: 0 0 auto; color: #7f99aa; }
 .math-tool-list button:hover { background: #ecf3f8; }
 .math-tool-list button.active { border-color: #cce0ee; background: #eaf4fb; color: #245e8a; }
-.math-tool-card { padding: 24px; border: 1px solid #dfe8ef; border-radius: 11px; background: #fff; box-shadow: 0 3px 16px rgba(40, 74, 100, .04); }
-.math-tool-card h3 { margin: 0 0 5px; color: #263f54; font-size: 17px; }
-.math-tool-card > p { margin: 0 0 24px; color: #7c90a1; font-size: 12px; line-height: 1.5; }
+.math-tool-list button.active svg { color: #286b9a; }
+.math-tool-list button:focus-visible, .math-tool-run:focus-visible, .math-tool-mobile-picker select:focus-visible { outline: 2px solid #397caf; outline-offset: 2px; }
+.math-tool-mobile-picker { display: none; }
+.math-tool-card { padding: 26px; border: 1px solid #dfe8ef; border-radius: 12px; background: #fff; }
+.math-tool-card-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 26px; padding-bottom: 22px; border-bottom: 1px solid #e9eff3; }
+.math-tool-card-icon { display: grid; flex: 0 0 43px; width: 43px; height: 43px; place-items: center; border-radius: 10px; background: #eaf4fb; color: #286b9a; }
+.math-tool-card h3 { margin: 0 0 5px; color: #263f54; font-size: 18px; }
+.math-tool-card-header p { margin: 0; color: #60778a; font-size: 12px; line-height: 1.5; }
 .math-tool-label { display: block; margin-bottom: 8px; color: #45637a; font-size: 12px; font-weight: 700; }
 .math-tool-equation, .math-tool-data { width: 100%; border: 1px solid #cfdde8; border-radius: 7px; background: #fff; }
 .math-tool-equation { padding: 3px 12px; }
@@ -233,7 +316,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .math-tool-options { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .math-tool-options label { display: grid; gap: 6px; flex: 1 1 100px; color: #60788b; font-size: 11px; font-weight: 650; }
 .math-tool-options input { width: 100%; padding: 9px; border: 1px solid #d5e1e9; border-radius: 6px; color: #2d4659; }
-.math-tool-run { margin-top: 22px; border: 0; border-radius: 7px; padding: 10px 15px; background: #286b9a; color: #fff; font-size: 12.5px; font-weight: 700; }
+.math-tool-run { display: inline-flex; align-items: center; gap: 9px; margin-top: 22px; border: 0; border-radius: 7px; padding: 11px 15px; background: #286b9a; color: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer; }
 .math-tool-run:hover { background: #205a83; }
 .math-tool-error { margin: 16px 0 0 !important; color: #b64e49 !important; }
 .math-tool-result { margin-top: 24px; padding: 17px; border: 1px solid #d2e4d9; border-radius: 8px; background: #f6fbf8; }
@@ -243,14 +326,35 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .graph-stage { width: 100%; height: 100%; min-height: 350px; position: relative; overflow: hidden; background: #fff; }
 .graph-canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .graph-canvas:active { cursor: grabbing; }
+.graph-canvas.geometry-cursor, .graph-canvas.geometry-cursor:active { cursor: crosshair; }
+.geometry-toolbar { position: absolute; z-index: 3; top: 17px; left: 17px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; max-width: calc(100% - 95px); padding: 5px; border: 1px solid #e1e9ef; border-radius: 9px; background: rgba(255, 255, 255, .96); box-shadow: 0 3px 14px rgba(32, 61, 85, .08); }
+.geometry-toolbar button { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 30px; min-height: 30px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #61778a; font-size: 11px; font-weight: 650; }
+.geometry-toolbar button svg { width: 16px; height: 16px; stroke-width: 1.8; }
+.geometry-toolbar button:hover { background: #eef4f8; color: #265f8e; }
+.geometry-toolbar button.active { background: #e5f0f8; color: #245f8a; }
+.geometry-toolbar button:disabled { cursor: not-allowed; opacity: .45; }
+.geometry-toolbar button.geometry-finish, .geometry-toolbar button.geometry-cancel, .geometry-toolbar button.geometry-delete { width: auto; min-height: 27px; padding: 0 8px; }
+.geometry-toolbar select, .geometry-toolbar input { height: 26px; max-width: 94px; padding: 0 6px; border: 1px solid #d9e2e9; border-radius: 5px; background: #fff; color: #52697b; font-family: inherit; font-size: 11px; }
+.geometry-toolbar label { display: inline-flex; align-items: center; gap: 4px; color: #7d8f9d; font-size: 10px; white-space: nowrap; }
+.geometry-toolbar input { width: 48px; }
+.geometry-toolbar .geometry-finish { background: #286b9a; color: #fff; }
+.geometry-toolbar .geometry-finish:hover { background: #205a83; color: #fff; }
+.geometry-toolbar .geometry-cancel { color: #ad4d46; }
+.geometry-toolbar .geometry-delete { color: #ad4d46; border-left: 1px solid #e5ebf0; border-radius: 0; }
+.geometry-hint { padding: 0 7px; color: #8999a7; font-size: 10.5px; white-space: nowrap; }
 .graph-controls { position: absolute; right: 20px; top: 20px; flex-direction: column; gap: 4px; background: #fff; padding: 5px; border: 1px solid #e1e9ef; border-radius: 9px; box-shadow: 0 3px 14px rgba(32, 61, 85, .09); }
 .graph-controls button { display: grid; place-items: center; min-width: 28px; height: 29px; padding: 0 5px; border: 0; border-radius: 5px; background: #fff; color: #5b758a; font-size: 20px; font-weight: 400; line-height: 1; }
 .graph-controls button:hover { background: #eef4f8; color: #265f8e; }
 .graph-controls .reset-view { font-size: 22px; border-top: 1px solid #edf0f3; border-radius: 0 0 5px 5px; }
 .graph-controls .wireframe-toggle { font-size: 11px; font-weight: 700; }
+.graph-controls .solid-controls { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; border-top: 1px solid #edf0f3; }
+.graph-controls .solid-controls button { min-width: 56px; height: 24px; font-size: 10px; }
+.graph-controls .solid-controls button.active { background: #e5f0f8; color: #245f8a; }
+.graph-controls .solid-controls .slice-height { display: grid; gap: 2px; padding: 3px 5px; color: #60778a; font-size: 10px; text-align: center; }
+.graph-controls .solid-controls .slice-height input { width: 82px; }
 .graph-controls .analysis-toggle { border-top: 1px solid #edf0f3; border-radius: 0 0 5px 5px; font-family: Georgia, serif; font-size: 17px; font-style: italic; }
 .graph-controls .analysis-toggle.active { color: #225f8d; background: #e9f3fa; }
-.analysis-panel { position: absolute; z-index: 2; top: 20px; left: 20px; width: min(290px, calc(100% - 100px)); max-height: min(420px, calc(100% - 116px)); overflow-y: auto; padding: 14px; border: 1px solid #dce7ef; border-radius: 9px; background: rgba(255, 255, 255, .97); box-shadow: 0 5px 20px rgba(35, 61, 82, .1); }
+.analysis-panel { position: absolute; z-index: 2; top: 68px; left: 20px; width: min(290px, calc(100% - 100px)); max-height: min(420px, calc(100% - 164px)); overflow-y: auto; padding: 14px; border: 1px solid #dce7ef; border-radius: 9px; background: rgba(255, 255, 255, .97); box-shadow: 0 5px 20px rgba(35, 61, 82, .1); }
 .analysis-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #28475f; font-size: 13px; }
 .analysis-heading button, .trace-card button { border: 0; background: transparent; color: #8294a3; font-size: 18px; line-height: 1; }
 .analysis-heading button:hover, .trace-card button:hover { color: #315d7d; }
@@ -270,7 +374,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 .axis-x { color: #d8534c; }.axis-y { color: #4b66bd; }.axis-z { color: #4b9a65; }
 .visual-footer { height: 35px; flex: 0 0 35px; justify-content: space-between; gap: 10px; padding: 0 21px; color: #9baab7; font-size: 10.5px; border-top: 1px solid #eef1f4; background: #fbfcfd; }
 .visual-footer kbd { font-family: inherit; font-size: 10px; color: #768c9e; border: 1px solid #dce5ed; border-radius: 3px; padding: 1px 3px; margin-left: 2px; }
-.graph-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: 230px; padding: 24px; text-align: center; border: 1px solid #dce7ef; border-radius: 11px; background: rgba(255,255,255,.96); box-shadow: 0 8px 28px rgba(38,71,94,.1); }
+.graph-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); min-width: 230px; padding: 24px; text-align: center; border: 1px solid #dce7ef; border-radius: 11px; background: rgba(255,255,255,.96); box-shadow: 0 8px 28px rgba(38,71,94,.1); pointer-events: none; }
+.graph-empty button { pointer-events: auto; }
 .graph-empty-icon { display: grid; place-items: center; margin: 0 auto 11px; width: 42px; height: 42px; color: #397eaa; background: #edf5fa; border-radius: 10px; }
 .graph-empty strong { font-size: 14px; }.graph-empty p { color: #7d90a0; font-size: 12px; }
 .graph-error { display: grid; place-items: center; height: 100%; color: #ad4d46; font-size: 14px; }
@@ -294,6 +399,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
   .brand-divider { display: none; }
   .project-header, .expression-heading { padding-left: 19px; padding-right: 19px; }
   .parameter-panel { padding-left: 19px; padding-right: 19px; }
+  .math-tools-view { padding: 24px; }
+  .math-tools-grid { grid-template-columns: 1fr; }
+  .math-tool-mobile-picker { display: grid; gap: 7px; color: #45637a; font-size: 12px; font-weight: 700; }
+  .math-tool-mobile-picker select { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid #cfdde8; border-radius: 8px; background: #fff; color: #29475c; font: inherit; }
+  .math-tool-list { display: none; }
 }
 
 @media (max-width: 650px) {
@@ -306,16 +416,21 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
   .expression-panel { order: 2; max-height: none; overflow: visible; border-right: 0; border-top: 1px solid #e4ebf1; }
   .visual-panel { order: 1; height: min(68vh, 540px); min-height: 370px; }
   .view-toolbar { height: 55px; flex-basis: 55px; padding: 0 12px; }
+  .view-switch { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .view-switch::-webkit-scrollbar { display: none; }
+  .view-switch button { flex: 0 0 auto; }
   .view-switch button { padding: 0 9px; }
   .math-tools-view { padding: 18px 14px 28px; }
-  .math-tools-grid { grid-template-columns: 1fr; }
-  .math-tool-list { display: flex; flex-wrap: wrap; gap: 3px; }
-  .math-tool-list button { padding: 7px 9px; }
+  .spreadsheet-layout { grid-template-columns: 1fr; }
+  .spreadsheet-scroll { max-height: 48vh; }
   .math-tool-card { padding: 18px; }
   .graph-count { display: none; }
   .export-image span { display: none; }
   .graph-wrap { min-height: 280px; }
   .graph-stage { min-height: 280px; }
+  .geometry-toolbar { top: 9px; left: 9px; gap: 2px; max-width: calc(100% - 68px); padding: 3px; }
+  .geometry-toolbar button { min-height: 25px; padding: 0 6px; font-size: 10px; }
+  .geometry-hint { display: none; }
   .visual-footer { padding: 0 11px; }
   .visual-footer span:last-child { display: none; }
   .project-header { padding-top: 18px; padding-bottom: 16px; }
@@ -326,3 +441,172 @@ button:focus-visible, input:focus-visible { outline: 3px solid #78a9db; outline-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+.app-shell[data-theme="dark"] {
+  color-scheme: dark;
+  color: #e3e8ec;
+  background: #111417;
+}
+.app-shell[data-theme="dark"] .app-header,
+.app-shell[data-theme="dark"] .visual-panel,
+.app-shell[data-theme="dark"] .view-toolbar,
+.app-shell[data-theme="dark"] .math-tool-card,
+.app-shell[data-theme="dark"] .math-tool-equation,
+.app-shell[data-theme="dark"] .math-tool-data,
+.app-shell[data-theme="dark"] .parameter-label output,
+.app-shell[data-theme="dark"] .expression-card,
+.app-shell[data-theme="dark"] .graph-controls,
+.app-shell[data-theme="dark"] .graph-controls button,
+.app-shell[data-theme="dark"] .geometry-toolbar,
+.app-shell[data-theme="dark"] .help-dialog {
+  background-color: #191e23;
+}
+.app-shell[data-theme="dark"] .app-header,
+.app-shell[data-theme="dark"] .expression-panel,
+.app-shell[data-theme="dark"] .project-header,
+.app-shell[data-theme="dark"] .expression-card,
+.app-shell[data-theme="dark"] .parameter-panel,
+.app-shell[data-theme="dark"] .view-toolbar,
+.app-shell[data-theme="dark"] .visual-footer,
+.app-shell[data-theme="dark"] .math-tool-card,
+.app-shell[data-theme="dark"] .math-tool-equation,
+.app-shell[data-theme="dark"] .math-tool-data,
+.app-shell[data-theme="dark"] .graph-controls,
+.app-shell[data-theme="dark"] .geometry-toolbar,
+.app-shell[data-theme="dark"] .graph-empty,
+.app-shell[data-theme="dark"] .analysis-panel,
+.app-shell[data-theme="dark"] .trace-card,
+.app-shell[data-theme="dark"] .coordinate-readout,
+.app-shell[data-theme="dark"] .axis-key,
+.app-shell[data-theme="dark"] .help-dialog,
+.app-shell[data-theme="dark"] .help-example {
+  border-color: #303941;
+}
+.app-shell[data-theme="dark"] .expression-panel,
+.app-shell[data-theme="dark"] .math-tools-view { background: #15191d; }
+.app-shell[data-theme="dark"] .spreadsheet-view { background: #15191d; }
+.app-shell[data-theme="dark"] .spreadsheet-heading h2,
+.app-shell[data-theme="dark"] .spreadsheet-card-heading h3 { color: #dce5eb; }
+.app-shell[data-theme="dark"] .spreadsheet-heading p,
+.app-shell[data-theme="dark"] .spreadsheet-card-heading p,
+.app-shell[data-theme="dark"] .spreadsheet-card-heading > span,
+.app-shell[data-theme="dark"] .spreadsheet-note { color: #9aaab5; }
+.app-shell[data-theme="dark"] .spreadsheet-heading code { color: #a9d4f3; }
+.app-shell[data-theme="dark"] .spreadsheet-tabs { border-color: #303941; }
+.app-shell[data-theme="dark"] .spreadsheet-tabs button.active { background: #191e23; color: #a9d4f3; }
+.app-shell[data-theme="dark"] .spreadsheet-grid-card,
+.app-shell[data-theme="dark"] .spreadsheet-chart-card,
+.app-shell[data-theme="dark"] .probability-card,
+.app-shell[data-theme="dark"] .inference-card { background: #191e23; border-color: #303941; }
+.app-shell[data-theme="dark"] .probability-heading h3 { color: #dce5eb; }
+.app-shell[data-theme="dark"] .probability-heading p,
+.app-shell[data-theme="dark"] .probability-note { color: #9aaab5; }
+.app-shell[data-theme="dark"] .probability-fields label { color: #9aaab5; }
+.app-shell[data-theme="dark"] .probability-fields input,
+.app-shell[data-theme="dark"] .probability-fields select { background: #20262b; border-color: #3a454e; color: #d4dfe6; }
+.app-shell[data-theme="dark"] .anova-groups { border-color: #3a454e; }
+.app-shell[data-theme="dark"] .anova-groups legend,
+.app-shell[data-theme="dark"] .anova-groups label { color: #9aaab5; }
+.app-shell[data-theme="dark"] .probability-result > div { background: #20272c; border-color: #303941; }
+.app-shell[data-theme="dark"] .probability-result b { color: #a9d4f3; }
+.app-shell[data-theme="dark"] .inference-result { background: #20272c; border-color: #303941; }
+.app-shell[data-theme="dark"] .inference-result > span,
+.app-shell[data-theme="dark"] .inference-result small { color: #9aaab5; }
+.app-shell[data-theme="dark"] .inference-result strong { color: #a9d4f3; }
+.app-shell[data-theme="dark"] .spreadsheet-grid th,
+.app-shell[data-theme="dark"] .spreadsheet-grid td { border-color: #303941; }
+.app-shell[data-theme="dark"] .spreadsheet-grid thead th,
+.app-shell[data-theme="dark"] .spreadsheet-grid tbody th { background: #20262b; color: #a4b2bc; }
+.app-shell[data-theme="dark"] .spreadsheet-grid td input { color: #d8e1e7; }
+.app-shell[data-theme="dark"] .spreadsheet-grid td input:focus { background: #1b2830; }
+.app-shell[data-theme="dark"] .spreadsheet-grid td.cell-error { background: #382523; }
+.app-shell[data-theme="dark"] .regression-summary { background: #20272c; }
+.app-shell[data-theme="dark"] .regression-summary strong { color: #c4dce9; }
+.app-shell[data-theme="dark"] .regression-picker { color: #9aaab5; }
+.app-shell[data-theme="dark"] .regression-picker select { background: #20262b; border-color: #3a454e; color: #d4dfe6; }
+.app-shell[data-theme="dark"] .spreadsheet-chart-options label { color: #9aaab5; }
+.app-shell[data-theme="dark"] .spreadsheet-chart-options select { background: #20262b; border-color: #3a454e; color: #d4dfe6; }
+.app-shell[data-theme="dark"] .stem-leaf { background: #20272c; color: #cad5dc; }
+.app-shell[data-theme="dark"] .stem-leaf small { color: #9aaab5; }
+.app-shell[data-theme="dark"] .chart-label { fill: #a6b4bd; }
+.app-shell[data-theme="dark"] .box-whisker,
+.app-shell[data-theme="dark"] .box-median { stroke: #b9ccd7; }
+.app-shell[data-theme="dark"] .residual-heading { border-color: #303941; }
+.app-shell[data-theme="dark"] .residual-values { color: #9aaab5; }
+.app-shell[data-theme="dark"] .residual-values strong { color: #cad5dc; }
+.app-shell[data-theme="dark"] .chart-axis { stroke: #65717a; }
+.app-shell[data-theme="dark"] .view-switch { background: #252c32; }
+.app-shell[data-theme="dark"] .view-switch button.active { background: #343e46; color: #a9d4f3; }
+.app-shell[data-theme="dark"] .project-title,
+.app-shell[data-theme="dark"] .equation-field,
+.app-shell[data-theme="dark"] .brand-name,
+.app-shell[data-theme="dark"] .math-tool-data,
+.app-shell[data-theme="dark"] .math-tool-options input { color: #e4eaee; }
+.app-shell[data-theme="dark"] .project-title:hover,
+.app-shell[data-theme="dark"] .project-title:focus,
+.app-shell[data-theme="dark"] .parameter-label output,
+.app-shell[data-theme="dark"] .math-tool-options input { background: #20262b; border-color: #3a454e; }
+.app-shell[data-theme="dark"] .header-button,
+.app-shell[data-theme="dark"] .add-top,
+.app-shell[data-theme="dark"] .graph-examples button { background: #20262b; border-color: #39454f; color: #c2cdd5; }
+.app-shell[data-theme="dark"] .primary-action { background: #285f8e; border-color: #3976a8; color: white; }
+.app-shell[data-theme="dark"] .icon-button { color: #a8b6c0; }
+.app-shell[data-theme="dark"] .icon-button:hover,
+.app-shell[data-theme="dark"] .graph-controls button:hover { background: #2c353c; color: #b8dfff; }
+.app-shell[data-theme="dark"] .geometry-toolbar button { color: #adbbc5; }
+.app-shell[data-theme="dark"] .geometry-toolbar button:hover { background: #2c353c; color: #c4e3f6; }
+.app-shell[data-theme="dark"] .geometry-toolbar button.active { background: #253d4e; color: #b5dcf4; }
+.app-shell[data-theme="dark"] [data-tooltip]::after { background: #252d33; border-color: #3d4951; color: #e1e9ee; }
+.app-shell[data-theme="dark"] .geometry-toolbar select,
+.app-shell[data-theme="dark"] .geometry-toolbar input { background: #20262b; border-color: #3a454e; color: #d4dfe6; }
+.app-shell[data-theme="dark"] .geometry-toolbar label { color: #a2b1bb; }
+.app-shell[data-theme="dark"] .geometry-toolbar .geometry-delete { border-left-color: #39434b; color: #e1978f; }
+.app-shell[data-theme="dark"] .geometry-hint { color: #a2b1bb; }
+.app-shell[data-theme="dark"] .add-expression { background: #1b242a; color: #9ac4e1; border-color: #3b505d; }
+.app-shell[data-theme="dark"] .empty-expressions,
+.app-shell[data-theme="dark"] .graph-empty { background: #1a2025; color: #b8c6cf; border-color: #39454e; }
+.app-shell[data-theme="dark"] .empty-expressions strong,
+.app-shell[data-theme="dark"] .math-tools-intro h2,
+.app-shell[data-theme="dark"] .math-tool-card h3,
+.app-shell[data-theme="dark"] .parameter-head,
+.app-shell[data-theme="dark"] .analysis-heading { color: #dce5eb; }
+.app-shell[data-theme="dark"] .parameter-item + .parameter-item { border-top-color: #35414a; }
+.app-shell[data-theme="dark"] .parameter-head-actions button,
+.app-shell[data-theme="dark"] .parameter-head-actions select,
+.app-shell[data-theme="dark"] .parameter-settings form input { background: #20262b; border-color: #3a454e; color: #c7d9e5; }
+.app-shell[data-theme="dark"] .parameter-settings form button { background: #253d4e; color: #b5dcf4; }
+.app-shell[data-theme="dark"] .parameter-settings,
+.app-shell[data-theme="dark"] .parameter-settings form label { color: #a9b8c2; }
+.app-shell[data-theme="dark"] .math-tool-result { background: #18231e; border-color: #355443; }
+.app-shell[data-theme="dark"] .math-tool-result pre { color: #c3e4ce; }
+.app-shell[data-theme="dark"] .analysis-panel,
+.app-shell[data-theme="dark"] .trace-card,
+.app-shell[data-theme="dark"] .coordinate-readout,
+.app-shell[data-theme="dark"] .axis-key,
+.app-shell[data-theme="dark"] .graph-empty { background-color: rgba(25, 30, 35, .97); color: #cad3d9; }
+.app-shell[data-theme="dark"] .analysis-results button { color: #c1d0da; }
+.app-shell[data-theme="dark"] .analysis-results button:hover { background: #283139; }
+.app-shell[data-theme="dark"] .help-dialog p { color: #b5c2cb; }
+.app-shell[data-theme="dark"] .help-dialog code,
+.app-shell[data-theme="dark"] .empty-expressions code { color: #a8d5f2; }
+.app-shell[data-theme="dark"] .help-example { color: #aebcc5; }
+.app-shell[data-theme="dark"] .math-tool-list button { color: #a9b9c4; }
+.app-shell[data-theme="dark"] .math-tool-list button.active { background: #213344; border-color: #31536b; color: #b2d9f2; }
+.app-shell[data-theme="dark"] .math-tool-list button:hover { background: #232c33; }
+.app-shell[data-theme="dark"] .math-tool-list button svg,
+.app-shell[data-theme="dark"] .math-tool-group h3 svg { color: #91aab9; }
+.app-shell[data-theme="dark"] .math-tool-list button.active svg { color: #b2d9f2; }
+.app-shell[data-theme="dark"] .math-tool-group h3,
+.app-shell[data-theme="dark"] .math-tool-mobile-picker { color: #b3c6d3; }
+.app-shell[data-theme="dark"] .math-tool-group + .math-tool-group,
+.app-shell[data-theme="dark"] .math-tool-card-header { border-color: #35414a; }
+.app-shell[data-theme="dark"] .math-tool-card-icon { background: #213344; color: #b2d9f2; }
+.app-shell[data-theme="dark"] .math-tool-mobile-picker select { background: #20262b; border-color: #3a454e; color: #e4eaee; }
+.app-shell[data-theme="dark"] .math-tool-label { color: #b3c6d3; }
+.app-shell[data-theme="dark"] .math-tools-intro p,
+.app-shell[data-theme="dark"] .math-tool-card-header p,
+.app-shell[data-theme="dark"] .math-tool-options label { color: #9eafb9; }
+.app-shell[data-theme="dark"] .visual-footer { background: #171c20; border-top-color: #293139; }
+.app-shell[data-theme="dark"] .visual-footer kbd { border-color: #3b464f; color: #bdc8cf; }
+.app-shell[data-theme="dark"] .graph-controls .reset-view,
+.app-shell[data-theme="dark"] .graph-controls .analysis-toggle { border-top-color: #39434b; }

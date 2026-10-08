@@ -9,6 +9,8 @@ export interface TurningPoint extends CurvePoint {
   kind: 'minimum' | 'maximum'
 }
 
+export interface InflectionPoint extends CurvePoint { kind: 'inflection' }
+
 const sampleCount = 900
 const maxResults = 64
 
@@ -140,6 +142,36 @@ export function findCurveExtrema(graph: GraphExpression, parameterA: number, min
     if (kind === 'minimum' && (y > before || y > after)) continue
     if (kind === 'maximum' && (y < before || y < after)) continue
     points.push({ x, y, kind })
+  }
+  return points
+}
+
+export function findCurveInflections(graph: GraphExpression, parameterA: number, minX: number, maxX: number): InflectionPoint[] {
+  if (graph.kind !== 'curve' || !Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX) return []
+  const evaluate = (x: number) => graph.evaluate(x, 0, parameterA)
+  const curvature = (x: number) => {
+    const h = 2e-3 * Math.max(1, Math.abs(x))
+    const before = evaluate(x - h); const value = evaluate(x); const after = evaluate(x + h)
+    return [before, value, after].every(Number.isFinite) ? (after - 2 * value + before) / (h * h) : Number.NaN
+  }
+  const count = 700; const step = (maxX - minX) / count; const points: InflectionPoint[] = []
+  let left = minX; let leftCurvature = curvature(left)
+  for (let index = 1; index <= count && points.length < maxResults; index += 1) {
+    const right = minX + index * step; const rightCurvature = curvature(right)
+    const curvatureBeforeLeft = index > 1 ? curvature(left - step) : Number.NaN
+    const crossesAtZero = Math.abs(leftCurvature) < 1e-8 && Number.isFinite(curvatureBeforeLeft) && curvatureBeforeLeft * rightCurvature < 0
+    if (Number.isFinite(leftCurvature) && Number.isFinite(rightCurvature) && (leftCurvature * rightCurvature < 0 || crossesAtZero)) {
+      let low = left; let high = right; let lowSign = Math.sign(leftCurvature)
+      for (let iteration = 0; iteration < 48; iteration += 1) {
+        const middle = (low + high) / 2; const middleCurvature = curvature(middle)
+        if (!Number.isFinite(middleCurvature)) break
+        if (Math.sign(middleCurvature) === lowSign) low = middle
+        else high = middle
+      }
+      const x = (low + high) / 2; const y = evaluate(x)
+      if (Number.isFinite(y) && !points.some((point) => Math.abs(point.x - x) < step * .2)) points.push({ x, y, kind: 'inflection' })
+    }
+    left = right; leftCurvature = rightCurvature
   }
   return points
 }

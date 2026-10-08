@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Box, Calculator, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Plus, Redo2, RotateCcw, Trash2, Undo2, Upload } from 'lucide-react'
+import { Box, Calculator, ChartNoAxesCombined, Download, Eye, EyeOff, HelpCircle, Moon, Plus, Redo2, RotateCcw, Sun, TableProperties, Trash2, Undo2, Upload } from 'lucide-react'
 import { Graph2D } from './components/Graph2D'
 import { Graph3D } from './components/Graph3D'
 import { EquationField } from './components/EquationField'
 import { MathTools } from './components/MathTools'
+import { SpreadsheetView } from './components/SpreadsheetView'
+import { ParameterControl } from './components/ParameterControl'
 import { formatNumber, type GraphExpression, type PlottableGraph } from './lib/math'
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
 import { compileWorkspace } from './lib/workspace'
+import { evaluateSpreadsheet } from './lib/spreadsheet'
+import { defaultParameterRange, nextParameterName, unusedParameterNames, type SliderParameter } from './lib/parameters'
 
-type View = '2d' | '3d' | 'tools'
+type View = '2d' | '3d' | 'tools' | 'sheet'
+type Theme = 'light' | 'dark'
 
 function describeGraph(graph: GraphExpression): string {
   const kind = graph.kind === 'surface' ? '3D surface'
@@ -30,11 +35,20 @@ function App() {
   const [history, setHistory] = useState(() => createHistory(loadProject()))
   const project = history.present
   const [view, setView] = useState<View>('2d')
+  const [parameterName, setParameterName] = useState('b')
+  const [theme, setTheme] = useState<Theme>(() => {
+    try { return localStorage.getItem('contour-theme') === 'dark' ? 'dark' : 'light' } catch { return 'light' }
+  })
   const [saveStatus, setSaveStatus] = useState('Saved on this device')
   const [message, setMessage] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const graphCanvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    try { localStorage.setItem('contour-theme', theme) } catch { /* Theme still applies for this session. */ }
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#111417' : '#f7f9fc')
+  }, [theme])
 
   function setProject(update: Project | ((current: Project) => Project), group: string | null = null) {
     const now = Date.now()
@@ -46,8 +60,13 @@ function App() {
     ))
   }
 
-  const compiledRows = useMemo(() => compileWorkspace(project.expressions, project.parameterA), [project.expressions, project.parameterA])
-  const definitions = useMemo(() => Object.fromEntries(compiledRows.flatMap((row) => row.definition ? [[row.definition.name, row.definition.value]] : [])), [compiledRows])
+  const parameterValues = useMemo(() => Object.fromEntries(project.parameters.map((parameter) => [parameter.name, parameter.value])), [project.parameters])
+  const unusedNames = useMemo(() => unusedParameterNames(project.expressions, project.parameters), [project.expressions, project.parameters])
+  const selectedParameterName = unusedNames.includes(parameterName) ? parameterName : (unusedNames[0] ?? '')
+  const baseRows = useMemo(() => compileWorkspace(project.expressions, project.parameterA, {}, parameterValues), [project.expressions, project.parameterA, parameterValues])
+  const definitions = useMemo(() => ({ ...parameterValues, ...Object.fromEntries(baseRows.flatMap((row) => row.definition ? [[row.definition.name, row.definition.value]] : [])) }), [baseRows, parameterValues])
+  const sheetLinks = useMemo(() => Object.fromEntries(Object.entries(evaluateSpreadsheet(project.spreadsheet, definitions, project.parameterA, project.spreadsheet.activeSheetId)).flatMap(([address, value]) => value.value === null || value.value === undefined ? [] : [[address, value.value]])), [project.spreadsheet, definitions, project.parameterA])
+  const compiledRows = useMemo(() => compileWorkspace(project.expressions, project.parameterA, sheetLinks, parameterValues), [project.expressions, project.parameterA, sheetLinks, parameterValues])
 
   const graphs = useMemo<PlottableGraph[]>(() => compiledRows.flatMap((row) => row.graph ? [{
     id: row.id,
@@ -59,6 +78,9 @@ function App() {
   const activeCount = graphs.filter((item) => item.visible && (view === '2d'
     ? !['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(item.graph.kind)
     : view === '3d' && ['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(item.graph.kind))).length
+  const hasCanvasObjects = view === '2d'
+    ? project.geometry.some((object) => object.visible)
+    : view === '3d' && (project.solids.some((object) => object.visible) || project.vectorFields.some((object) => object.visible))
 
   useEffect(() => {
     setSaveStatus('Saving…')
@@ -138,6 +160,24 @@ function App() {
     }))
   }
 
+  function addParameter() {
+    const name = selectedParameterName
+    if (!name) { setMessage('All available parameter letters are in use.'); return }
+    setProject((current) => ({ ...current, parameters: [...current.parameters, { name, value: 1, ...defaultParameterRange }] }))
+    setMessage(`Parameter ${name} added. Use ${name} in an expression to control its graph.`)
+  }
+
+  function updateParameter(parameter: SliderParameter, dragging = false) {
+    setProject((current) => parameter.name === 'a'
+      ? { ...current, parameterA: parameter.value, parameterARange: { min: parameter.min, max: parameter.max, step: parameter.step } }
+      : { ...current, parameters: current.parameters.map((item) => item.name === parameter.name ? parameter : item) },
+    dragging ? `parameter:${parameter.name}` : null)
+  }
+
+  function removeParameter(name: string) {
+    setProject((current) => ({ ...current, parameters: current.parameters.filter((item) => item.name !== name) }))
+  }
+
   async function importProject(file?: File) {
     if (!file) return
     try {
@@ -166,16 +206,17 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <header className="app-header">
         <div className="brand" aria-label="Contour home">
-          <div className="brand-mark" aria-hidden="true"><span /></div>
-          <div className="brand-name">Contour</div>
+          <img className="brand-mark" src="/contour-app-icon.png" alt="" />
+          <div className="brand-name">CONTOUR</div>
           <div className="brand-divider" />
           <div className="brand-subtitle">Graphing workspace</div>
         </div>
 
         <div className="header-actions">
+          <button className="icon-button header-icon" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
           <button className="icon-button header-icon" type="button" onClick={() => setHistory(undoHistory)} aria-label="Undo" title="Undo (⌘Z)" disabled={history.past.length === 0}><Undo2 size={18} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => setHistory(redoHistory)} aria-label="Redo" title="Redo (⌘⇧Z)" disabled={history.future.length === 0}><Redo2 size={18} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => setHelpOpen(true)} aria-label="Help" title="Help"><HelpCircle size={18} /></button>
@@ -245,26 +286,16 @@ function App() {
             <button type="button" onClick={() => addExample('x = 3*cos(t), y = 3*sin(t)')}>Parametric circle</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 = 9')}>Implicit circle</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 <= 9')}>Shaded disk</button>
-            <button type="button" onClick={() => addExample('b = 2a')}>Variable b</button>
+            <button type="button" onClick={() => { const name = nextParameterName(project.expressions, project.parameters); if (name) addExample(`${name} = 2a`); else setMessage('All available variable letters are in use.') }}>Derived variable</button>
             <button type="button" onClick={() => addExample('x = 2a*cos(t), y = 2a*sin(t), z = t/2', '3d')}>3D helix</button>
             <button type="button" onClick={() => addExample('x = (2 + cos(v))*cos(u), y = (2 + cos(v))*sin(u), z = sin(v)', '3d')}>Torus</button>
             <button type="button" onClick={() => addExample('x^2 + y^2 + z^2 = 9', '3d')}>Sphere</button>
           </div>
 
           <div className="parameter-panel">
-            <div className="parameter-head"><span>Parameters</span><span className="parameter-count">1 active</span></div>
-            <div className="parameter-label"><label htmlFor="parameter-a">a</label><output htmlFor="parameter-a">{formatNumber(project.parameterA, 1)}</output></div>
-            <input
-              id="parameter-a"
-              className="parameter-slider"
-              type="range"
-              min="-5"
-              max="5"
-              step="0.1"
-              value={project.parameterA}
-              onChange={(event) => setProject((current) => current.parameterA === Number(event.target.value) ? current : { ...current, parameterA: Number(event.target.value) }, 'parameter:a')}
-            />
-            <div className="slider-ends"><span>−5</span><span>5</span></div>
+            <div className="parameter-head"><span>Parameters</span><div className="parameter-head-actions"><span className="parameter-count">{project.parameters.length + 1} active</span><select aria-label="New parameter letter" value={selectedParameterName} onChange={(event) => setParameterName(event.target.value)} disabled={!unusedNames.length}>{unusedNames.map((name) => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={addParameter} disabled={!unusedNames.length} aria-label="Add parameter" title="Add parameter"><Plus size={16} /> Add</button></div></div>
+            <ParameterControl parameter={{ name: 'a', value: project.parameterA, ...project.parameterARange }} onChange={updateParameter} />
+            {project.parameters.map((parameter) => <ParameterControl key={parameter.name} parameter={parameter} onChange={updateParameter} onRemove={() => removeParameter(parameter.name)} />)}
           </div>
 
           <div className="sidebar-footer">
@@ -275,22 +306,24 @@ function App() {
 
         <section className="visual-panel" aria-label="Graph view">
           <div className="view-toolbar">
-            <div className="view-switch" role="tablist" aria-label="Graph dimension">
-              <button type="button" role="tab" aria-selected={view === '2d'} className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')}><ChartNoAxesCombined size={17} /> 2D graph</button>
-              <button type="button" role="tab" aria-selected={view === '3d'} className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')}><Box size={17} /> 3D graph</button>
-              <button type="button" role="tab" aria-selected={view === 'tools'} className={view === 'tools' ? 'active' : ''} onClick={() => setView('tools')}><Calculator size={17} /> Maths tools</button>
+            <div className="view-switch" role="tablist" aria-label="Workspace view">
+              <button type="button" role="tab" aria-label="2D graph" data-tooltip="2D graph" aria-selected={view === '2d'} className={view === '2d' ? 'active' : ''} onClick={() => setView('2d')}><ChartNoAxesCombined size={18} /></button>
+              <button type="button" role="tab" aria-label="3D graph" data-tooltip="3D graph" aria-selected={view === '3d'} className={view === '3d' ? 'active' : ''} onClick={() => setView('3d')}><Box size={18} /></button>
+              <button type="button" role="tab" aria-label="Maths tools" data-tooltip="Maths tools" aria-selected={view === 'tools'} className={view === 'tools' ? 'active' : ''} onClick={() => setView('tools')}><Calculator size={18} /></button>
+              <button type="button" role="tab" aria-label="Spreadsheet" data-tooltip="Spreadsheet" aria-selected={view === 'sheet'} className={view === 'sheet' ? 'active' : ''} onClick={() => setView('sheet')}><TableProperties size={18} /></button>
             </div>
             <div className="toolbar-right">
-              {view !== 'tools' && <><span className="graph-count">{activeCount} {activeCount === 1 ? 'graph' : 'graphs'}</span>
+              {(view === '2d' || view === '3d') && <><span className="graph-count">{activeCount} {activeCount === 1 ? 'graph' : 'graphs'}</span>
                 <button className="export-image" type="button" onClick={exportImage}><Download size={16} /> <span>Export image</span></button></>}
             </div>
           </div>
           <div className="graph-wrap">
-            {view === '2d'
-              ? <Graph2D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} />
-              : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} />
+            {view === 'sheet' ? <SpreadsheetView data={project.spreadsheet} definitions={definitions} parameterA={project.parameterA} onChange={(spreadsheet) => setProject((current) => ({ ...current, spreadsheet }))} />
+              : view === '2d'
+              ? <Graph2D graphs={graphs} geometry={project.geometry} onGeometryChange={(geometry) => setProject((current) => ({ ...current, geometry }))} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} linkedValues={sheetLinks} />
+              : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} solids={project.solids} onSolidsChange={(solids) => setProject((current) => ({ ...current, solids }))} vectorFields={project.vectorFields} onVectorFieldsChange={(vectorFields) => setProject((current) => ({ ...current, vectorFields }))} definitions={definitions} />
                 : <MathTools parameterA={project.parameterA} definitions={definitions} />}
-            {view !== 'tools' && activeCount === 0 && (
+            {(view === '2d' || view === '3d') && activeCount === 0 && !hasCanvasObjects && (
               <div className="graph-empty" role="status">
                 <div className="graph-empty-icon">{view === '2d' ? <ChartNoAxesCombined size={24} /> : <Box size={24} />}</div>
                 <strong>No {view.toUpperCase()} graph yet</strong>
@@ -299,7 +332,7 @@ function App() {
               </div>
             )}
           </div>
-          <div className="visual-footer"><span>{view === 'tools' ? 'Tool results are temporary; project expressions continue to save locally.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
+          <div className="visual-footer"><span>{view === 'tools' ? 'Tool results are temporary; project expressions continue to save locally.' : view === 'sheet' ? 'Spreadsheet cells save with your project and recalculate from linked values.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
         </section>
       </main>
 
@@ -323,8 +356,8 @@ function App() {
             <div className="help-example"><span>Implicit</span><code>x^2 + y^2 = 9</code></div>
             <div className="help-example"><span>Inequality</span><code>x^2 + y^2 ≤ 9</code></div>
             <p>Polar curves use θ from 0 to 2π radians. Planar parametric curves use t from 0 to 2π; 3D space curves use t from 0 to 4π. Parametric surfaces use u and v from 0 to 2π.</p>
-            <p>Use the <strong>a</strong> slider to explore how a parameter changes a graph. Drag the canvas to pan or rotate, and scroll to zoom.</p>
-            <p>Define a variable in any expression row, such as <code>b = 2a</code>, then use it in another row, such as <code>y = b sin(x)</code>. Variables can depend on each other; circular definitions show an error.</p>
+            <p>Use the <strong>Parameters</strong> panel to add sliders such as <code>b</code> and <code>c</code>. Use them in equations, adjust their ranges, and drag the canvas to pan or rotate.</p>
+            <p>Define a variable in any expression row, such as <code>k = 2a</code>, then use it in another row, such as <code>y = k sin(x)</code>. A letter cannot be both a slider and a definition; circular definitions show an error.</p>
             <p>In 2D, click a function to trace its coordinates and approximate slope. Use the <strong>ƒ′</strong> button to mark roots, turning points, and intersections of visible <code>y =</code> functions.</p>
             <p>Your current project saves in this browser automatically. Use <strong>Save project</strong> to keep a file you can reopen later.</p>
             <p>Use <strong>Undo</strong> and <strong>Redo</strong> in the toolbar, or press <code>⌘Z</code> and <code>⌘⇧Z</code>, to revisit edits from this session.</p>
