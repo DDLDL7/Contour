@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateProbability, sampleDistribution } from './probability'
+import { calculateProbability, sampleDistribution, distributionQuantile } from './probability'
 
 describe('probability distributions', () => {
   it('samples bounded continuous and discrete distribution plots', () => {
@@ -37,5 +37,14 @@ describe('probability distributions', () => {
   it('rejects invalid distribution parameters', () => {
     expect(() => calculateProbability({ distribution: 'normal', x: 0, firstParameter: 0, secondParameter: 0 })).toThrow(/Standard deviation/)
     expect(() => calculateProbability({ distribution: 'binomial', x: 1, firstParameter: 2.5, secondParameter: .5 })).toThrow(/whole number/)
+  })
+
+  it('brackets heavy-tailed quantiles rather than silently saturating at ±64', () => {
+    // The df=1 distribution is Cauchy: its quantile is tan(π(p−1/2)).
+    expect(distributionQuantile('student-t', .999, 1)).toBeCloseTo(Math.tan(Math.PI * (.999 - .5)), 6)
+    expect(distributionQuantile('student-t', .001, 1)).toBeCloseTo(-Math.tan(Math.PI * (.999 - .5)), 6)
+    expect(distributionQuantile('normal', .975)).toBeCloseTo(1.959963984540054, 7)
+    expect(() => distributionQuantile('student-t', .975, Number.POSITIVE_INFINITY)).toThrow(/finite/)
+    expect(() => distributionQuantile('student-t', .999, .01)).toThrow(/search range/)
   })
 })

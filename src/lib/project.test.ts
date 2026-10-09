@@ -104,6 +104,22 @@ describe('project files', () => {
     expect(parseProjectFile(JSON.stringify(source)).solids).toEqual(source.solids)
   })
 
+  it('round-trips editable notebook links, graph windows and Welch settings', () => {
+    const project = starterProject()
+    project.notebook = [
+      { id: 'graph', kind: 'graph', expressionId: 'curve', bounds: { minX: -2, maxX: 3, minY: -4, maxY: 5 } },
+      { id: 'table', kind: 'table', sheetId: 'sheet-1', rows: 18 },
+      { id: 'action', kind: 'action', action: 'set-parameter', label: 'Set a', parameterName: 'a', expressionId: '', value: 2 },
+    ]
+    project.spreadsheet.inferenceMode = 'welch'
+    project.spreadsheet.welch = { firstColumn: 'B', secondColumn: 'D', confidence: '.99', nullDifference: '1', alternative: 'greater' }
+    const reopened = parseProjectFile(JSON.stringify(project))
+    expect(reopened.notebook).toEqual(project.notebook)
+    expect(reopened.spreadsheet).toEqual(project.spreadsheet)
+    expect(() => parseProjectFile(JSON.stringify({ ...project, spreadsheet: { ...project.spreadsheet, welch: { ...project.spreadsheet.welch, firstColumn: 'Z' } } }))).toThrow(/spreadsheet/)
+    expect(() => parseProjectFile(JSON.stringify({ ...project, notebook: [{ ...project.notebook[0], bounds: { minX: 0, maxX: 0 } }] }))).toThrow(/notebook/)
+  })
+
   it('preserves saved 3D vector fields', () => {
     const source = {
       title: 'Fields', parameterA: 1, expressions: [],

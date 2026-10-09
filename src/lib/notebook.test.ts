@@ -18,4 +18,15 @@ describe('saved notebook cells', () => {
   it('substitutes only known finite one-letter values in notes', () => {
     expect(replaceNotebookVariables('a={{a}}, b={{b}}, q={{q}}', { a: 2.5, b: Number.NaN })).toBe('a=2.5, b={{b}}, q={{q}}')
   })
+
+  it('validates saved graph windows, editable table ranges and fixed actions', () => {
+    const graph = { id: 'graph-cell', kind: 'graph', expressionId: 'graph-1', bounds: { minX: -2, maxX: 2, minY: -5, maxY: 5 } }
+    const table = { id: 'table-cell', kind: 'table', sheetId: 'sheet-1', rows: 18 }
+    const action = { id: 'button', kind: 'action', label: 'Set a', action: 'set-parameter', expressionId: '', parameterName: 'a', value: 2 }
+    expect(areNotebookCells([graph, table, action])).toBe(true)
+    expect(areNotebookCells([{ ...graph, bounds: { ...graph.bounds, maxX: -2 } }])).toBe(false)
+    expect(areNotebookCells([{ ...graph, bounds: { ...graph.bounds, minY: Number.NaN } }])).toBe(false)
+    expect(areNotebookCells([{ ...table, rows: 19 }])).toBe(false)
+    expect(areNotebookCells([{ ...action, action: 'eval' }])).toBe(false)
+  })
 })

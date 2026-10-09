@@ -2,6 +2,18 @@ import { distributionQuantile, calculateProbability, fDistributionSurvival } fro
 
 export type InferenceMethod = 't-test' | 'z-test' | 't-interval' | 'z-interval'
 export type Alternative = 'two-sided' | 'greater' | 'less'
+export type InferenceMode = 'one-sample' | 'welch' | 'anova' | 'posthoc' | 'chi-square' | 'independence'
+export interface WelchSettings { firstColumn: string; secondColumn: string; nullDifference: string; confidence: string; alternative: Alternative }
+export const defaultWelchSettings: WelchSettings = { firstColumn: 'B', secondColumn: 'C', nullDifference: '0', confidence: '0.95', alternative: 'two-sided' }
+export function isWelchSettings(value: unknown): value is WelchSettings {
+  if (!value || typeof value !== 'object') return false
+  const settings = value as WelchSettings
+  return typeof settings.firstColumn === 'string' && /^[A-H]$/.test(settings.firstColumn)
+    && typeof settings.secondColumn === 'string' && /^[A-H]$/.test(settings.secondColumn)
+    && typeof settings.nullDifference === 'string' && settings.nullDifference.length <= 80
+    && typeof settings.confidence === 'string' && settings.confidence.length <= 80
+    && ['two-sided', 'greater', 'less'].includes(settings.alternative)
+}
 
 export interface InferenceResult {
   n: number
@@ -19,6 +31,49 @@ export interface AnovaResult { groups: number; observations: number; fStatistic:
 export interface GoodnessOfFitResult { categories: number; total: number; statistic: number; pValue: number; degreesOfFreedom: number }
 export interface IndependenceResult { rows: number; columns: number; total: number; statistic: number; pValue: number; degreesOfFreedom: number; expectedMinimum: number }
 export interface PairwiseResult { first: number; second: number; meanDifference: number; statistic: number; adjustedPValue: number; degreesOfFreedom: number }
+
+export interface WelchResult {
+  firstN: number; secondN: number; firstMean: number; secondMean: number
+  firstStandardDeviation: number; secondStandardDeviation: number
+  meanDifference: number; standardError: number; degreesOfFreedom: number
+  statistic: number; pValue: number; lower: number; upper: number; confidence: number
+}
+
+/** Independent samples, unequal variances: NIST e-Handbook, sections 1.3.5.3 and 7.3.1. */
+export function runWelchInference(first: number[], second: number[], nullDifference = 0, confidence = .95, alternative: Alternative = 'two-sided'): WelchResult {
+  if ([first, second].some((sample) => sample.length < 2 || sample.some((value) => !Number.isFinite(value)))) {
+    throw new Error('Welch inference needs at least two finite observations in each sample.')
+  }
+  if (!Number.isFinite(nullDifference)) throw new Error('Enter a finite null difference.')
+  if (!(confidence > 0 && confidence < 1)) throw new Error('Confidence level must be between 0 and 1.')
+  const summarize = (sample: number[]) => {
+    const mean = sample.reduce((sum, value) => sum + value / sample.length, 0)
+    const variance = sample.reduce((sum, value) => sum + (value - mean) ** 2 / (sample.length - 1), 0)
+    return { mean, variance, n: sample.length }
+  }
+  const a = summarize(first); const b = summarize(second)
+  const va = a.variance / a.n; const vb = b.variance / b.n
+  const variance = va + vb
+  if (variance === 0) throw new Error('Both samples have zero variation; Welch inference is undefined.')
+  const standardError = Math.sqrt(variance)
+  // Normalize the terms to avoid squaring a potentially large variance.
+  const degreesOfFreedom = 1 / ((va / variance) ** 2 / (a.n - 1) + (vb / variance) ** 2 / (b.n - 1))
+  const meanDifference = a.mean - b.mean
+  const statistic = (meanDifference - nullDifference) / standardError
+  if (![variance, meanDifference, statistic, degreesOfFreedom].every(Number.isFinite)) throw new Error('Sample magnitudes exceed the numerical range supported by Welch inference.')
+  // Use the lower tail directly rather than subtracting a nearly-one CDF.
+  const tail = calculateProbability({ distribution: 'student-t', x: -Math.abs(statistic), firstParameter: degreesOfFreedom, secondParameter: 0 }).cumulative
+  const lowerTail = statistic <= 0 ? tail : 1 - tail
+  const upperTail = statistic >= 0 ? tail : 1 - tail
+  const pValue = alternative === 'two-sided' ? 2 * tail : alternative === 'less' ? lowerTail : upperTail
+  const critical = distributionQuantile('student-t', (1 + confidence) / 2, degreesOfFreedom)
+  const margin = critical * standardError
+  if (![margin, meanDifference - margin, meanDifference + margin].every(Number.isFinite)) throw new Error('The confidence interval exceeds the supported numerical range.')
+  return { firstN: a.n, secondN: b.n, firstMean: a.mean, secondMean: b.mean,
+    firstStandardDeviation: Math.sqrt(a.variance), secondStandardDeviation: Math.sqrt(b.variance),
+    meanDifference, standardError, degreesOfFreedom, statistic, pValue: Math.max(0, Math.min(1, pValue)),
+    lower: meanDifference - margin, upper: meanDifference + margin, confidence }
+}
 
 export function runOneWayAnova(groups: number[][]): AnovaResult {
   if (groups.length < 2 || groups.some((group) => group.length < 2 || group.some((value) => !Number.isFinite(value)))) {

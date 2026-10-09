@@ -5,8 +5,8 @@ export type NotebookCell =
   | { id: string; kind: 'calculation'; expression: string; latex?: string; operation: NotebookOperation }
   | { id: string; kind: 'visibility'; label: string; expressionId: string }
   | { id: string; kind: 'input'; label: string; parameterName: string }
-  | { id: string; kind: 'graph'; expressionId: string }
-  | { id: string; kind: 'table'; sheetId: string }
+  | { id: string; kind: 'graph'; expressionId: string; bounds?: NotebookGraphBounds }
+  | { id: string; kind: 'table'; sheetId: string; rows?: number }
   | { id: string; kind: 'action'; label: string; action: 'toggle-expression' | 'set-parameter'; expressionId: string; parameterName: string; value: number }
 
 export function areNotebookCells(value: unknown): value is NotebookCell[] {
@@ -26,7 +26,9 @@ export function areNotebookCells(value: unknown): value is NotebookCell[] {
     if (item.kind === 'input') return typeof item.label === 'string' && item.label.length <= 120
       && typeof item.parameterName === 'string' && /^[a-z]$/.test(item.parameterName)
     if (item.kind === 'graph') return typeof item.expressionId === 'string' && item.expressionId.length <= 80
+      && (item.bounds === undefined || areNotebookGraphBounds(item.bounds))
     if (item.kind === 'table') return typeof item.sheetId === 'string' && /^[\w-]{1,40}$/.test(item.sheetId)
+      && (item.rows === undefined || (Number.isInteger(item.rows) && item.rows >= 1 && item.rows <= 18))
     if (item.kind === 'action') return typeof item.label === 'string' && item.label.length <= 120
       && typeof item.action === 'string' && ['toggle-expression', 'set-parameter'].includes(item.action)
       && typeof item.expressionId === 'string' && item.expressionId.length <= 80
@@ -34,6 +36,16 @@ export function areNotebookCells(value: unknown): value is NotebookCell[] {
       && Number.isFinite(item.value)
     return false
   })
+}
+
+export interface NotebookGraphBounds { minX: number; maxX: number; minY: number; maxY: number }
+export const defaultNotebookGraphBounds: NotebookGraphBounds = { minX: -8, maxX: 8, minY: -5, maxY: 5 }
+
+export function areNotebookGraphBounds(value: unknown): value is NotebookGraphBounds {
+  if (!value || typeof value !== 'object') return false
+  const bounds = value as NotebookGraphBounds
+  return [bounds.minX, bounds.maxX, bounds.minY, bounds.maxY].every((entry) => Number.isFinite(entry) && Math.abs(entry) <= 1e6)
+    && bounds.maxX - bounds.minX >= 1e-6 && bounds.maxY - bounds.minY >= 1e-6
 }
 
 export function replaceNotebookVariables(content: string, values: Readonly<Record<string, number>>): string {

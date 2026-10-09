@@ -13,12 +13,11 @@ interface Props {
 
 export function SpreadsheetView({ data, definitions, parameterA, onChange }: Props) {
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
-  const [activeSheetId, setActiveSheetId] = useState<string | undefined>(data.activeSheetId)
   const [regressionKind, setRegressionKind] = useState<RegressionKind>('linear')
   const [chartKind, setChartKind] = useState<'scatter' | 'histogram' | 'bar' | 'box' | 'stem'>('scatter')
   const [dataColumn, setDataColumn] = useState('B')
   const sheets = spreadsheetSheets(data)
-  const sheet = activeSpreadsheetSheet(data, activeSheetId)
+  const sheet = activeSpreadsheetSheet(data)
   const values = useMemo(() => evaluateSpreadsheet(data, definitions, parameterA, sheet.id), [data, definitions, parameterA, sheet.id])
   const numericCells = useMemo(() => Object.fromEntries(Object.entries(values).map(([address, cell]) => [address, cell.value])), [values])
   const points = useMemo(() => Array.from({ length: spreadsheetRows - 1 }, (_, index) => index + 2)
@@ -74,15 +73,14 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
   function updateCell(address: string, raw: string) {
     const nextCells = { ...sheet.cells, [address]: raw }
     const nextSheets = sheets.map((item) => item.id === sheet.id ? { ...item, cells: nextCells } : item)
-    onChange({ cells: nextCells, sheets: nextSheets, activeSheetId: sheet.id })
+    onChange({ ...data, cells: nextCells, sheets: nextSheets, activeSheetId: sheet.id })
   }
 
   function addSheet() {
     if (sheets.length >= 20) return
     const id = crypto.randomUUID()
     const next = [...sheets, { id, name: `Sheet ${sheets.length + 1}`, cells: {} }]
-    onChange({ cells: sheet.cells, sheets: next, activeSheetId: id })
-    setActiveSheetId(id)
+    onChange({ ...data, cells: sheet.cells, sheets: next, activeSheetId: id })
     setSelectedCell(null)
   }
 
@@ -118,7 +116,7 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
 
   return <div className="spreadsheet-view">
     <div className="spreadsheet-heading"><div><span className="tools-overline">Spreadsheet & statistics</span><h2>Linked data table</h2><p>Enter formulas such as <code>=A2*2</code> or <code>='Sheet 2'!A2</code>. Sheets and graph variables recalculate together.</p></div></div>
-    <div className="spreadsheet-tabs" role="tablist" aria-label="Spreadsheet sheets">{sheets.map((item) => <button key={item.id} type="button" role="tab" aria-selected={item.id === sheet.id} className={item.id === sheet.id ? 'active' : ''} onClick={() => { setActiveSheetId(item.id); onChange({ cells: item.cells, sheets, activeSheetId: item.id }); setSelectedCell(null) }}>{item.name}</button>)}<button type="button" onClick={addSheet} disabled={sheets.length >= 20} title={sheets.length >= 20 ? 'Maximum of 20 sheets' : 'Add sheet'}>+ Add sheet</button></div>
+    <div className="spreadsheet-tabs" role="tablist" aria-label="Spreadsheet sheets">{sheets.map((item) => <button key={item.id} type="button" role="tab" aria-selected={item.id === sheet.id} className={item.id === sheet.id ? 'active' : ''} onClick={() => { onChange({ ...data, cells: item.cells, sheets, activeSheetId: item.id }); setSelectedCell(null) }}>{item.name}</button>)}<button type="button" onClick={addSheet} disabled={sheets.length >= 20} title={sheets.length >= 20 ? 'Maximum of 20 sheets' : 'Add sheet'}>+ Add sheet</button></div>
     <div className="spreadsheet-layout">
       <section className="spreadsheet-grid-card" aria-label="Editable spreadsheet">
         <div className="spreadsheet-scroll"><table className="spreadsheet-grid"><thead><tr><th aria-label="Row number" />{spreadsheetColumns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
@@ -155,6 +153,6 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
         </>}
       </section>
     </div>
-    <div className="spreadsheet-statistics"><ProbabilityCalculator /><InferenceTools values={numericCells} /></div>
+    <div className="spreadsheet-statistics"><ProbabilityCalculator /><InferenceTools values={numericCells} inferenceMode={data.inferenceMode} welch={data.welch} onModeChange={(inferenceMode) => onChange({ ...data, inferenceMode })} onWelchChange={(welch) => onChange({ ...data, welch })} /></div>
   </div>
 }

@@ -143,14 +143,17 @@ export function sampleDistribution(input: Omit<ProbabilityInput, 'x'>): Distribu
 
 export function distributionQuantile(distribution: 'normal' | 'student-t', probability: number, degreesOfFreedom = 1): number {
   if (!(probability > 0 && probability < 1)) throw new Error('Probability must be between 0 and 1, exclusive.')
-  if (distribution === 'student-t' && !(degreesOfFreedom > 0)) throw new Error('Degrees of freedom must be greater than zero.')
-  let low = -64; let high = 64
+  if (distribution === 'student-t' && (!(degreesOfFreedom > 0) || !Number.isFinite(degreesOfFreedom))) throw new Error('Degrees of freedom must be finite and greater than zero.')
+  const cumulativeAt = (x: number) => calculateProbability({ distribution, x,
+    firstParameter: distribution === 'normal' ? 0 : degreesOfFreedom,
+    secondParameter: distribution === 'normal' ? 1 : 0 }).cumulative
+  let low = -1; let high = 1
+  while (cumulativeAt(low) > probability && Math.abs(low) < 1e12) low *= 2
+  while (cumulativeAt(high) < probability && high < 1e12) high *= 2
+  if (cumulativeAt(low) > probability || cumulativeAt(high) < probability) throw new Error('This quantile exceeds the supported numerical search range.')
   for (let iteration = 0; iteration < 100; iteration += 1) {
     const middle = (low + high) / 2
-    const cumulative = calculateProbability({
-      distribution, x: middle, firstParameter: distribution === 'normal' ? 0 : degreesOfFreedom,
-      secondParameter: distribution === 'normal' ? 1 : 0,
-    }).cumulative
+    const cumulative = cumulativeAt(middle)
     if (cumulative < probability) low = middle
     else high = middle
   }

@@ -13,7 +13,7 @@ Contour is an offline-capable graphing calculator for students, built for the we
 - Construct and transform linked 2D geometry, including points, paths, polygons, circles, ellipses, measurements, and selected loci and envelopes.
 - Enter formulas on multiple spreadsheet sheets; link active-sheet cells to graphs, chart data, run regressions and supported statistical tests.
 - Explore supported 3D solids, vector fields, surface intersections, cross-sections, and printable nets.
-- Add offline notebook notes with inline LaTeX and live variables, calculation cells, graph-visibility checkboxes, and numeric input boxes for parameters.
+- Add offline notebook notes with inline LaTeX and live variables, calculations, editable linked graph/table cells, graph checkboxes, parameter inputs, and fixed action buttons. Append quadratic and data-model activity starters without replacing existing work.
 - Undo and redo project edits, including equation typing, title changes, slider moves, and adding or removing expressions.
 - Save work automatically on the device, export and import project files, and export graph images.
 - Use Maths tools for calculations, supported symbolic algebra and calculus, bounded numerical solving, matrix operations, statistics, regression, and an initial-value ODE estimate. Results display in mathematical notation where supported.
@@ -83,3 +83,15 @@ This version does not yet offer a general-purpose symbolic CAS, arbitrary geomet
 npm test
 npm run build
 ```
+
+### Notebook activity authoring
+
+In **Notebook**, choose **Explore a quadratic** or **Build a data model** to append an activity to your current project. Each insertion is one undoable edit. You can edit the prompts, change linked equations, create a new equation from a graph cell, and apply a saved preview window. Previews support explicit functions, vertical lines, polar curves and parametric curves; polar/parametric sampling uses 0–2π. Sampling may miss small features. Other graph kinds display guidance to use the dedicated graph workspace.
+
+Table cells link to a saved sheet. Enable **Edit linked cells** to enter raw values or formulas, then disable editing to read evaluated values. All eight spreadsheet columns are available, with a saved visible range of 1–18 rows. Formula errors are shown per cell. Editing a non-active sheet preserves which sheet supplies cell-address values to graphs. Notebook links, graph windows, table ranges and starter content survive autosave and project-file export/reopen.
+
+### Welch two-sample inference
+
+In **Spreadsheet & Stats**, select **Welch two-sample test / interval**, choose two different sample columns, and enter the null mean difference, alternative and confidence level. Rows 2–18 supply finite numeric observations independently from each column; blanks and non-numeric cells are omitted. Results show sample summaries, mean difference, standard error, fractional degrees of freedom, p-value and a two-sided confidence interval. The interval remains two-sided even when the test alternative is one-sided.
+
+The selected procedure and Welch inputs save with the project; click **Calculate** after reopening to recompute results. Changes to the data or inputs hide stale results. These procedures assume independent samples and approximately normal populations for small samples. They do not handle paired observations, check normality or identify outliers. Both constant samples are rejected. Formulas follow [NIST’s two-sample test](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm) and [mean-difference confidence limits](https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/diffmean.htm). Student-t critical values use a bounded expanding numerical search; unsupported extreme quantiles report an error instead of being capped at ±64.

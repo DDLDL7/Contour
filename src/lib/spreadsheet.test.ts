@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateSpreadsheet, fitLinear, fitRegression, isSpreadsheetData, type SpreadsheetData } from './spreadsheet'
+import { evaluateSpreadsheet, fitLinear, fitRegression, isSpreadsheetData, updateSpreadsheetCell, type SpreadsheetData } from './spreadsheet'
 
 describe('spreadsheet formula evaluation', () => {
+  it('writes through notebook sheet links while keeping the active-sheet graph scope', () => {
+    const data: SpreadsheetData = { cells: { A2: '1' }, activeSheetId: 'first', sheets: [
+      { id: 'first', name: 'First', cells: { A2: '1', B2: '=Second!A2+1' } },
+      { id: 'second', name: 'Second', cells: { A2: '2' } },
+    ] }
+    const next = updateSpreadsheetCell(data, 'second', 'A2', '5')
+    expect(next.activeSheetId).toBe('first')
+    expect(next.cells.A2).toBe('1')
+    expect(evaluateSpreadsheet(next).B2.value).toBe(6)
+    expect(isSpreadsheetData(next)).toBe(true)
+    expect(updateSpreadsheetCell(next, 'missing', 'A2', '8')).toBe(next)
+    expect(updateSpreadsheetCell(next, 'second', 'A19', '8')).toBe(next)
+    expect(updateSpreadsheetCell(next, 'second', 'A2', '')).toMatchObject({ sheets: [{ id: 'first' }, { id: 'second', cells: {} }] })
+  })
   it('recalculates referenced cells and linked workspace variables', () => {
     const data: SpreadsheetData = { cells: { A1: '3', B1: '=A1*2+a' } }
     expect(evaluateSpreadsheet(data, { a: 4 }, 4).B1.value).toBe(10)

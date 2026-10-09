@@ -1,7 +1,8 @@
 import { compileScalarDefinition } from './math'
+import { isWelchSettings, type InferenceMode, type WelchSettings } from './inference'
 
 export interface SpreadsheetSheet { id: string; name: string; cells: Record<string, string> }
-export interface SpreadsheetData { cells: Record<string, string>; sheets?: SpreadsheetSheet[]; activeSheetId?: string }
+export interface SpreadsheetData { cells: Record<string, string>; sheets?: SpreadsheetSheet[]; activeSheetId?: string; inferenceMode?: InferenceMode; welch?: WelchSettings }
 export interface SpreadsheetValue { raw: string; value: number | null; error?: string }
 
 export const spreadsheetColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -18,10 +19,26 @@ export function activeSpreadsheetSheet(data: SpreadsheetData, id = data.activeSh
   return sheets.find((sheet) => sheet.id === id) ?? sheets[0]
 }
 
+/** Edit a linked sheet without changing which sheet supplies graph cell references. */
+export function updateSpreadsheetCell(data: SpreadsheetData, sheetId: string, address: string, raw: string): SpreadsheetData {
+  if (!/^[A-H](?:[1-9]|1[0-8])$/.test(address) || raw.length > 500) return data
+  const sheets = spreadsheetSheets(data)
+  const sheet = sheets.find((item) => item.id === sheetId)
+  if (!sheet || sheet.cells[address] === raw) return data
+  const cells = { ...sheet.cells }
+  if (raw) cells[address] = raw
+  else delete cells[address]
+  const nextSheets = sheets.map((item) => item.id === sheetId ? { ...item, cells } : item)
+  const active = activeSpreadsheetSheet(data)
+  return { ...data, sheets: nextSheets, cells: active.id === sheetId ? cells : active.cells, activeSheetId: active.id }
+}
+
 export function isSpreadsheetData(value: unknown): value is SpreadsheetData {
   if (!value || typeof value !== 'object' || !('cells' in value) || !value.cells || typeof value.cells !== 'object') return false
   const validCells = (cells: unknown) => Boolean(cells && typeof cells === 'object' && Object.entries(cells).every(([address, cell]) => /^[A-H](?:[1-9]|1[0-8])$/.test(address) && typeof cell === 'string' && cell.length <= 500))
   const data = value as Partial<SpreadsheetData>
+  if (data.welch !== undefined && !isWelchSettings(data.welch)) return false
+  if (data.inferenceMode !== undefined && !['one-sample', 'welch', 'anova', 'posthoc', 'chi-square', 'independence'].includes(data.inferenceMode)) return false
   if (!validCells(data.cells)) return false
   if (data.sheets !== undefined && (!Array.isArray(data.sheets) || data.sheets.length < 1 || data.sheets.length > 20 || data.sheets.some((sheet) => !sheet || typeof sheet.id !== 'string' || !/^[\w-]{1,40}$/.test(sheet.id) || typeof sheet.name !== 'string' || !sheet.name.trim() || sheet.name.length > 40 || !validCells(sheet.cells)))) return false
   if (data.sheets && new Set(data.sheets.map((sheet) => sheet.id)).size !== data.sheets.length) return false

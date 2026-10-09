@@ -228,17 +228,29 @@
 .app-shell[data-theme] .notebook-preview { background: var(--bench); border-left-color: var(--blue); color: var(--ink); }
 .app-shell[data-theme] .notebook-check { border-color: var(--line); border-radius: 3px; color: var(--ink); }
 .app-shell[data-theme] :is(.notebook-linked-graph,.notebook-linked-table,.notebook-action-cell) { display: grid; gap: 12px; color: var(--ink); }
-.app-shell[data-theme] :is(.notebook-linked-graph > label,.notebook-linked-table > label,.notebook-action-cell > label) { display: grid; gap: 6px; max-width: 440px; color: var(--muted); font-size: 11px; font-weight: 650; }
+.app-shell[data-theme] :is(.notebook-linked-graph > label:not(.notebook-check),.notebook-linked-table > label:not(.notebook-check),.notebook-action-cell > label) { display: grid; gap: 6px; max-width: 440px; color: var(--muted); font-size: 11px; font-weight: 650; }
 .app-shell[data-theme] :is(.notebook-linked-graph select,.notebook-linked-table select,.notebook-action-cell input,.notebook-action-cell select) { min-height: 34px; border: 1px solid var(--line); border-radius: 3px; padding: 6px 9px; background: var(--bench); color: var(--ink); font: inherit; }
 .app-shell[data-theme] .notebook-graph-preview { width: min(100%, 580px); height: 210px; border: 1px solid var(--line); border-radius: 3px; background: var(--bench); }
-.app-shell[data-theme] .notebook-graph-axis { stroke: var(--line-strong); stroke-width: .45; }
-.app-shell[data-theme] .notebook-graph-line { fill: none; stroke: var(--blue); stroke-width: .9; vector-effect: non-scaling-stroke; }
+.app-shell[data-theme] .notebook-graph-axis { stroke: var(--muted); stroke-width: .6; }
+.app-shell[data-theme] .notebook-graph-line { fill: none; stroke: var(--blue); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .app-shell[data-theme] .notebook-table-scroll { overflow: auto; }
 .app-shell[data-theme] .notebook-table-scroll table { border-collapse: collapse; min-width: min(100%, 520px); font-size: 12px; }
 .app-shell[data-theme] .notebook-table-scroll :is(th,td) { min-width: 72px; padding: 6px 9px; border: 1px solid var(--line); color: var(--ink); text-align: left; }
 .app-shell[data-theme] .notebook-table-scroll th { background: var(--raised); color: var(--muted); }
 .app-shell[data-theme] .notebook-action-button { justify-self: start; min-height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 3px; background: var(--raised); color: var(--blue); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
 .app-shell[data-theme] .notebook-action-cell p { margin: 0; color: var(--muted); font-size: 11px; }
+.notebook-templates { max-width: 920px; margin: 22px auto 0; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.notebook-templates strong { font-size: 13px; }
+.notebook-templates p { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.notebook-bounds { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; }
+.notebook-bounds label { display: grid; gap: 6px; flex: 1 1 90px; color: var(--muted); font-size: 11px; }
+.app-shell[data-theme] :is(.notebook-bounds input,.notebook-table-scroll input) { width: 100%; min-height: 36px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); font: inherit; }
+.notebook-bounds .notebook-error { flex-basis: 100%; }
+.notebook-action-button:disabled { opacity: .5; cursor: not-allowed; }
+.app-shell[data-theme] .notebook-table-scroll table { min-width: 700px; width: 100%; }
+.notebook-table-scroll caption { padding: 0 0 10px; color: var(--muted); text-align: left; }
+.notebook-table-scroll input { min-width: 80px; }
+.notebook-table-scroll .notebook-error { display: block; max-width: 160px; margin-top: 4px; font-size: 11px; }
 .app-shell[data-theme] .spreadsheet-tabs { border-bottom-color: var(--line); }
 .app-shell[data-theme] .spreadsheet-tabs button { color: var(--muted); border-radius: 2px 2px 0 0; }
 .app-shell[data-theme] .spreadsheet-tabs button.active { background: var(--raised); color: var(--blue); box-shadow: 0 -2px var(--blue) inset; }

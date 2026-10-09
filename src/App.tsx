@@ -11,7 +11,8 @@ import { compileScalarDefinition, formatNumber, type GraphExpression, type Plott
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
 import { compileWorkspace } from './lib/workspace'
-import { evaluateSpreadsheet } from './lib/spreadsheet'
+import { appendActivity } from './lib/activities'
+import { evaluateSpreadsheet, updateSpreadsheetCell } from './lib/spreadsheet'
 import { defaultParameterRange, nextParameterName, unusedParameterNames, type SliderParameter } from './lib/parameters'
 
 type View = '2d' | '3d' | 'tools' | 'sheet' | 'notebook'
@@ -162,6 +163,25 @@ function App() {
         expressions: current.expressions.map((item) => item.id === id ? { ...item, ...changes } : item),
       }
     }, changes.text !== undefined || changes.latex !== undefined ? `expression:${id}` : null)
+  }
+
+  function createNotebookExpression(cellId: string) {
+    setProject((current) => {
+      if (!current.notebook.some((cell) => cell.id === cellId && cell.kind === 'graph')) return current
+      const id = crypto.randomUUID()
+      return {
+        ...current,
+        expressions: [...current.expressions, { id, text: 'y = x^2', color: graphColors[current.expressions.length % graphColors.length], visible: true }],
+        notebook: current.notebook.map((cell) => cell.id === cellId && cell.kind === 'graph' ? { ...cell, expressionId: id } : cell),
+      }
+    })
+  }
+
+  function updateNotebookSpreadsheetCell(sheetId: string, address: string, raw: string) {
+    setProject((current) => {
+      const spreadsheet = updateSpreadsheetCell(current.spreadsheet, sheetId, address, raw)
+      return spreadsheet === current.spreadsheet ? current : { ...current, spreadsheet }
+    }, `sheet:${sheetId}:${address}`)
   }
 
   function addExpression() {
@@ -372,7 +392,7 @@ function App() {
           <div className={`graph-wrap ${splitView && (view === '2d' || view === '3d') ? 'is-split' : ''}`}>
             <div className="primary-workspace">
             {view === 'sheet' ? <SpreadsheetView data={project.spreadsheet} definitions={definitions} parameterA={project.parameterA} onChange={(spreadsheet) => setProject((current) => ({ ...current, spreadsheet }))} />
-              : view === 'notebook' ? <NotebookView cells={project.notebook} expressions={project.expressions} definitions={definitions} parameterA={project.parameterA} parameterARange={project.parameterARange} parameters={project.parameters} spreadsheet={project.spreadsheet} onChange={(notebook, group) => setProject((current) => ({ ...current, notebook }), group)} onToggleExpression={(id, visible) => updateRow(id, { visible })} onParameterValueChange={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => name === 'a' ? { ...current, parameterA: value } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value } : item) }) }} onSetParameter={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => { const parameter = name === 'a' ? { name, ...current.parameterARange } : current.parameters.find((item) => item.name === name); if (!parameter) return current; const bounded = Math.max(parameter.min, Math.min(parameter.max, value)); return name === 'a' ? { ...current, parameterA: bounded } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value: bounded } : item) } }) }} />
+              : view === 'notebook' ? <NotebookView cells={project.notebook} expressions={project.expressions} definitions={definitions} parameterA={project.parameterA} parameterARange={project.parameterARange} parameters={project.parameters} spreadsheet={project.spreadsheet} onChange={(notebook, group) => setProject((current) => ({ ...current, notebook }), group)} onExpressionChange={(id, text, latex) => updateRow(id, { text, latex })} onCreateExpression={createNotebookExpression} onSpreadsheetCellChange={updateNotebookSpreadsheetCell} onAddActivity={(template) => setProject((current) => appendActivity(current, template))} onToggleExpression={(id, visible) => updateRow(id, { visible })} onParameterValueChange={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => name === 'a' ? { ...current, parameterA: value } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value } : item) }) }} onSetParameter={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => { const parameter = name === 'a' ? { name, ...current.parameterARange } : current.parameters.find((item) => item.name === name); if (!parameter) return current; const bounded = Math.max(parameter.min, Math.min(parameter.max, value)); return name === 'a' ? { ...current, parameterA: bounded } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value: bounded } : item) } }) }} />
               : view === '2d'
               ? <Graph2D graphs={graphs} geometry={project.geometry} onGeometryChange={(geometry) => setProject((current) => ({ ...current, geometry }))} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} linkedValues={sheetLinks} />
               : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} solids={project.solids} onSolidsChange={(solids) => setProject((current) => ({ ...current, solids }))} vectorFields={project.vectorFields} onVectorFieldsChange={(vectorFields) => setProject((current) => ({ ...current, vectorFields }))} definitions={definitions} />
