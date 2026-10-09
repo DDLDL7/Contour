@@ -48,13 +48,14 @@ export function MathTools({ parameterA, definitions }: Props) {
   const [variable, setVariable] = useState('y')
   const [replacement, setReplacement] = useState('2')
   const [assumption, setAssumption] = useState<'none' | 'positive' | 'nonnegative' | 'negative' | 'nonzero'>('none')
+  const [limitDirection, setLimitDirection] = useState<'both' | 'left' | 'right'>('both')
   const [matrixOperation, setMatrixOperation] = useState<MatrixOperation>('add')
   const [result, setResult] = useState<ToolResult | null>(null)
   const [calculatedInputs, setCalculatedInputs] = useState('')
   const [error, setError] = useState('')
   const selected = tools.find((item) => item.id === tool)!
   const dataset = tool === 'matrix' || tool === 'matrix-algebra' || tool === 'statistics' || tool === 'regression'
-  const inputSignature = JSON.stringify({ tool, input, start, end, initialY, center, order, variable, replacement, assumption, matrixOperation, parameterA, definitions })
+  const inputSignature = JSON.stringify({ tool, input, start, end, initialY, center, order, variable, replacement, assumption, limitDirection, matrixOperation, parameterA, definitions })
 
   function selectTool(next: MathTool) {
     setTool(next)
@@ -80,6 +81,7 @@ export function MathTools({ parameterA, definitions }: Props) {
         substitutionVariable: variable,
         replacement,
         assumption,
+        direction: limitDirection,
         matrixOperation,
       }))
       setCalculatedInputs(inputSignature)
@@ -122,6 +124,7 @@ export function MathTools({ parameterA, definitions }: Props) {
               {tool === 'ode' && <label>Initial y<input type="number" value={initialY} onChange={(event) => setInitialY(event.target.value)} /></label>}
             </div>
           )}
+          {tool === 'limit' && <div className="math-tool-options"><label>Approach direction<select value={limitDirection} onChange={(event) => setLimitDirection(event.target.value as typeof limitDirection)}><option value="both">Both sides</option><option value="left">From the left</option><option value="right">From the right</option></select></label></div>}
           {tool === 'partial' && <div className="math-tool-options"><label>Differentiate with respect to<select value={variable} onChange={(event) => setVariable(event.target.value)}><option value="x">x</option><option value="y">y</option><option value="z">z</option></select></label></div>}
           {tool === 'simplify' && <div className="math-tool-options"><label>Assume<select value={assumption} onChange={(event) => setAssumption(event.target.value as typeof assumption)}><option value="none">No assumptions</option><option value="positive">{variable} &gt; 0</option><option value="nonnegative">{variable} ≥ 0</option><option value="negative">{variable} &lt; 0</option><option value="nonzero">{variable} ≠ 0</option></select></label><label>Variable<select value={variable} onChange={(event) => setVariable(event.target.value)}><option value="x">x</option><option value="y">y</option><option value="z">z</option></select></label></div>}
           {tool === 'taylor' && <div className="math-tool-options"><label>Center x₀<input type="number" value={center} onChange={(event) => setCenter(event.target.value)} /></label><label>Order (0–8)<input type="number" min="0" max="8" value={order} onChange={(event) => setOrder(event.target.value)} /></label></div>}

@@ -5,6 +5,9 @@ export type NotebookCell =
   | { id: string; kind: 'calculation'; expression: string; latex?: string; operation: NotebookOperation }
   | { id: string; kind: 'visibility'; label: string; expressionId: string }
   | { id: string; kind: 'input'; label: string; parameterName: string }
+  | { id: string; kind: 'graph'; expressionId: string }
+  | { id: string; kind: 'table'; sheetId: string }
+  | { id: string; kind: 'action'; label: string; action: 'toggle-expression' | 'set-parameter'; expressionId: string; parameterName: string; value: number }
 
 export function areNotebookCells(value: unknown): value is NotebookCell[] {
   if (!Array.isArray(value) || value.length > 60) return false
@@ -22,6 +25,13 @@ export function areNotebookCells(value: unknown): value is NotebookCell[] {
       && typeof item.expressionId === 'string' && item.expressionId.length <= 80
     if (item.kind === 'input') return typeof item.label === 'string' && item.label.length <= 120
       && typeof item.parameterName === 'string' && /^[a-z]$/.test(item.parameterName)
+    if (item.kind === 'graph') return typeof item.expressionId === 'string' && item.expressionId.length <= 80
+    if (item.kind === 'table') return typeof item.sheetId === 'string' && /^[\w-]{1,40}$/.test(item.sheetId)
+    if (item.kind === 'action') return typeof item.label === 'string' && item.label.length <= 120
+      && typeof item.action === 'string' && ['toggle-expression', 'set-parameter'].includes(item.action)
+      && typeof item.expressionId === 'string' && item.expressionId.length <= 80
+      && typeof item.parameterName === 'string' && /^[a-z]$/.test(item.parameterName)
+      && Number.isFinite(item.value)
     return false
   })
 }

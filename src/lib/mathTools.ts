@@ -17,6 +17,7 @@ export interface ToolOptions {
   substitutionVariable?: string
   replacement?: string
   assumption?: 'none' | 'positive' | 'nonnegative' | 'negative' | 'nonzero'
+  direction?: 'both' | 'left' | 'right'
 }
 
 export interface ToolResult {
@@ -509,15 +510,20 @@ export function runMathTool(tool: MathTool, input: string, options: ToolOptions)
       if (order === 5 || !Number.isFinite(top) || !Number.isFinite(bottom) || Math.abs(top) > 1e-10 || Math.abs(bottom) > 1e-10) break
       quotient = parse(`(${derivative(numerator, 'x').toString()})/(${derivative(denominator, 'x').toString()})`)
     }
-    const samples = [1e-3, 1e-4, 1e-5].map((offset) => [
-      compiled.evaluate({ ...definitions, x: point - offset, a: options.a }),
-      compiled.evaluate({ ...definitions, x: point + offset, a: options.a }),
-    ])
-    const [left, right] = samples.at(-1)!
-    if (![left, right].every(Number.isFinite) || Math.abs(left - right) > 1e-3 * Math.max(1, Math.abs(left), Math.abs(right))) {
+    const direction = options.direction ?? 'both'
+    const samples = [1e-3, 1e-4, 1e-5].map((offset) => ({
+      left: compiled.evaluate({ ...definitions, x: point - offset, a: options.a }),
+      right: compiled.evaluate({ ...definitions, x: point + offset, a: options.a }),
+    }))
+    const { left, right } = samples.at(-1)!
+    const approaches = direction === 'left' ? [left] : direction === 'right' ? [right] : [left, right]
+    const sideSamples = direction === 'left' ? samples.map((sample) => sample.left) : direction === 'right' ? samples.map((sample) => sample.right) : []
+    const sideIsStable = sideSamples.length < 2 || Math.abs(sideSamples[2] - sideSamples[1]) <= 0.02 * Math.max(1, Math.abs(sideSamples[2]))
+    if (approaches.some((value) => !Number.isFinite(value)) || !sideIsStable || (approaches.length === 2 && Math.abs(left - right) > 1e-3 * Math.max(1, Math.abs(left), Math.abs(right)))) {
       return { title: 'Numerical limit', value: 'No common finite limit detected', note: 'A numerical probe cannot prove that a limit exists or does not exist.' }
     }
-    return { title: 'Numerical limit', value: `≈ ${numberText((left + right) / 2)}`, note: `Probed from both sides near x = ${numberText(point)}; this is not a symbolic proof.` }
+    const result = direction === 'left' ? left : direction === 'right' ? right : (left + right) / 2
+    return { title: direction === 'both' ? 'Two-sided numerical limit' : `${direction === 'left' ? 'Left' : 'Right'}-hand numerical limit`, value: `≈ ${numberText(result)}`, note: `${direction === 'both' ? 'Probed from both sides' : `Probed from the ${direction}`} near x = ${numberText(point)}; this is not a symbolic proof.` }
   }
 
   const start = finite(options.start, 'initial x')
