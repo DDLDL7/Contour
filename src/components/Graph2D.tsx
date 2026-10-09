@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Circle, CircleDot, Crosshair, DraftingCompass, Ellipse, Link, Move, MousePointer2, Orbit, Pentagon, Ruler, Triangle, Waves } from 'lucide-react'
-import { estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from '../lib/analysis'
+import { estimateCurveDiagnostics, estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from '../lib/analysis'
 import { contourSegments, sampleScalarGrid, type ScalarGrid } from '../lib/contours'
 import { evaluatePlanarPoint, formatNumber, type PlottableGraph } from '../lib/math'
 import { fitConic, intersectGeometryPaths, resolveGeometryPoints as resolveGeometryPointObjects, sampleLineEnvelope, type GeometryCircle, type GeometryConic, type GeometryEllipse, type GeometryEnvelope, type GeometryLocus, type GeometryObject, type GeometryPath, type GeometryPoint, type GeometryTool, type GeometryTransform, type TransformOperation } from '../lib/geometry'
@@ -57,6 +57,18 @@ function gridStep(scale: number): number {
   return 10 * power
 }
 
+function piTick(value: number): string {
+  const units = value / Math.PI
+  for (const denominator of [1, 2, 4, 5, 10]) {
+    const numerator = Math.round(units * denominator)
+    if (Math.abs(units - numerator / denominator) < 0.001) {
+      if (denominator === 1) return numerator === 1 ? 'π' : numerator === -1 ? '−π' : `${numerator}π`
+      return `${numerator < 0 ? '−' : ''}${Math.abs(numerator) === 1 ? '' : Math.abs(numerator)}π/${denominator}`
+    }
+  }
+  return `${formatNumber(units, 2)}π`
+}
+
 function drawInequalityShade(ctx: CanvasRenderingContext2D, grid: ScalarGrid, color: string, relation?: string): void {
   const shadeCanvas = document.createElement('canvas')
   shadeCanvas.width = grid.columns
@@ -102,6 +114,9 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
   const [viewport, setViewport] = useState(initialViewport)
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
   const [analysisOpen, setAnalysisOpen] = useState(false)
+  const [analysisCurveId, setAnalysisCurveId] = useState('')
+  const [analysisBounds, setAnalysisBounds] = useState({ from: '-2', to: '2' })
+  const [piAxis, setPiAxis] = useState(false)
   const [trace, setTrace] = useState<{ graphId: string; x: number } | null>(null)
   const [geometryTool, setGeometryTool] = useState<GeometryTool>('select')
   const [pendingVertices, setPendingVertices] = useState<{ id: string; point: GeometryPoint; isNew: boolean }[]>([])
@@ -176,6 +191,13 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
   }, [analysisOpen, graphs, parameterA, size, viewport])
 
   const tracedGraph = graphs.find((item) => item.id === trace?.graphId && item.visible && item.graph.kind === 'curve')
+  const visibleCurves = graphs.filter((item) => item.visible && item.graph.kind === 'curve')
+  const selectedAnalysisCurve = visibleCurves.find((item) => item.id === analysisCurveId) ?? visibleCurves[0]
+  const analysisFrom = Number(analysisBounds.from)
+  const analysisTo = Number(analysisBounds.to)
+  const curveDiagnostics = useMemo(() => selectedAnalysisCurve && analysisBounds.from.trim() && analysisBounds.to.trim()
+    ? estimateCurveDiagnostics(selectedAnalysisCurve.graph, parameterA, analysisFrom, analysisTo, trace?.graphId === selectedAnalysisCurve.id ? trace.x : (analysisFrom + analysisTo) / 2)
+    : null, [analysisBounds, analysisFrom, analysisTo, parameterA, selectedAnalysisCurve, trace])
   const tracedY = tracedGraph && trace ? tracedGraph.graph.evaluate(trace.x, 0, parameterA) : Number.NaN
   const tracedSlope = tracedGraph && trace ? estimateSlope(tracedGraph.graph, parameterA, trace.x) : Number.NaN
 
@@ -206,7 +228,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
     const worldY = (pixel: number) => centerY - (pixel - height / 2) / scale
 
     const palette = darkMode
-      ? { background: '#111417', grid: '#293139', axes: '#77848e', labels: '#a3adb5', point: '#171c20' }
+      ? { background: '#0c0e11', grid: '#242830', axes: '#77848e', labels: '#a3adb5', point: '#171c20' }
       : { background: '#ffffff', grid: '#e8edf3', axes: '#9aa9b9', labels: '#77899a', point: '#ffffff' }
     ctx.fillStyle = palette.background
     ctx.fillRect(0, 0, width, height)
@@ -223,6 +245,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
     }
 
     const step = gridStep(scale)
+    const xStep = piAxis ? gridStep(scale * Math.PI) * Math.PI : step
     const xMin = worldX(0)
     const xMax = worldX(width)
     const yMin = worldY(height)
@@ -230,7 +253,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
     ctx.strokeStyle = palette.grid
     ctx.lineWidth = 1
     ctx.beginPath()
-    for (let x = Math.ceil(xMin / step) * step; x <= xMax; x += step) {
+    for (let x = Math.ceil(xMin / xStep) * xStep; x <= xMax; x += xStep) {
       const px = Math.round(sx(x)) + 0.5
       ctx.moveTo(px, 0)
       ctx.lineTo(px, height)
@@ -257,9 +280,9 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
 
     ctx.fillStyle = palette.labels
     ctx.font = '11px -apple-system, BlinkMacSystemFont, sans-serif'
-    for (let x = Math.ceil(xMin / step) * step; x <= xMax; x += step) {
-      if (Math.abs(x) < step / 100) continue
-      ctx.fillText(formatNumber(x, 4), sx(x) + 5, Math.min(height - 7, Math.max(16, sy(0) + 15)))
+    for (let x = Math.ceil(xMin / xStep) * xStep; x <= xMax; x += xStep) {
+      if (Math.abs(x) < xStep / 100) continue
+      ctx.fillText(piAxis ? piTick(x) : formatNumber(x, 4), sx(x) + 5, Math.min(height - 7, Math.max(16, sy(0) + 15)))
     }
     for (let y = Math.ceil(yMin / step) * step; y <= yMax; y += step) {
       if (Math.abs(y) < step / 100) continue
@@ -647,7 +670,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         ctx.restore()
       }
     }
-  }, [analysis.features, canvasRef, cursor, darkMode, geometryTool, graphs, parameterA, pendingVertices, selectedPointId, size, trace, tracedGraph, tracedSlope, tracedY, viewport, visibleGeometry])
+  }, [analysis.features, canvasRef, cursor, darkMode, geometryTool, graphs, parameterA, pendingVertices, piAxis, selectedPointId, size, trace, tracedGraph, tracedSlope, tracedY, viewport, visibleGeometry])
 
   function updateCursor(clientX: number, clientY: number) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -975,6 +998,13 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
     setSelectedPointId(null)
   }
 
+  const mainTools: GeometryTool[] = ['select', 'point', 'line', 'vector']
+  const moreTools: GeometryTool[] = ['linked-point', 'segment', 'ray', 'polygon', 'circle', 'ellipse', 'conic', 'locus', 'envelope', 'distance', 'angle', 'perimeter', 'area', 'transform']
+  const toolButton = (tool: GeometryTool, showLabel = false) => <button key={tool} type="button" className={geometryTool === tool ? 'active' : ''} aria-label={tool === 'linked-point' ? 'Sheet point' : tool} data-tooltip={tool === 'linked-point' ? 'Sheet point' : tool[0].toUpperCase() + tool.slice(1)} aria-pressed={geometryTool === tool} onClick={() => { setGeometryTool(tool); setPendingVertices([]) }}>
+    {tool === 'select' ? <MousePointer2 /> : tool === 'point' ? <CircleDot /> : tool === 'linked-point' ? <Link /> : ['line', 'segment', 'ray', 'vector', 'perimeter', 'area'].includes(tool) ? <ConstructionGlyph kind={tool as 'line' | 'segment' | 'ray' | 'vector' | 'perimeter' | 'area'} /> : tool === 'polygon' ? <Pentagon /> : tool === 'circle' ? <Circle /> : tool === 'ellipse' ? <Ellipse /> : tool === 'conic' ? <DraftingCompass /> : tool === 'locus' ? <Orbit /> : tool === 'envelope' ? <Waves /> : tool === 'distance' ? <Ruler /> : tool === 'angle' ? <Triangle /> : tool === 'transform' ? <Move /> : <Crosshair />}
+    {showLabel && <span>{tool[0].toUpperCase() + tool.slice(1)}</span>}
+  </button>
+
   return (
     <div className="graph-stage" ref={containerRef}>
       <canvas
@@ -1052,11 +1082,8 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         }}
       />
       <div className="geometry-toolbar" role="toolbar" aria-label="Geometry tools">
-        {(['select', 'point', 'linked-point', 'line', 'segment', 'ray', 'vector', 'polygon', 'circle', 'ellipse', 'conic', 'locus', 'envelope', 'distance', 'angle', 'perimeter', 'area', 'transform'] as GeometryTool[]).map((tool) => (
-          <button key={tool} type="button" className={geometryTool === tool ? 'active' : ''} aria-label={tool === 'linked-point' ? 'Sheet point' : tool} data-tooltip={tool === 'linked-point' ? 'Sheet point' : tool[0].toUpperCase() + tool.slice(1)} aria-pressed={geometryTool === tool} onClick={() => { setGeometryTool(tool); setPendingVertices([]) }}>
-            {tool === 'select' ? <MousePointer2 /> : tool === 'point' ? <CircleDot /> : tool === 'linked-point' ? <Link /> : ['line', 'segment', 'ray', 'vector', 'perimeter', 'area'].includes(tool) ? <ConstructionGlyph kind={tool as 'line' | 'segment' | 'ray' | 'vector' | 'perimeter' | 'area'} /> : tool === 'polygon' ? <Pentagon /> : tool === 'circle' ? <Circle /> : tool === 'ellipse' ? <Ellipse /> : tool === 'conic' ? <DraftingCompass /> : tool === 'locus' ? <Orbit /> : tool === 'envelope' ? <Waves /> : tool === 'distance' ? <Ruler /> : tool === 'angle' ? <Triangle /> : tool === 'transform' ? <Move /> : <Crosshair />}
-          </button>
-        ))}
+        <div className="geometry-main-tools">{mainTools.map((tool) => toolButton(tool, true))}</div>
+        <details className="geometry-more"><summary>{moreTools.includes(geometryTool) ? geometryTool.replace('-', ' ') : 'More tools'}</summary><div>{moreTools.map((tool) => toolButton(tool, true))}</div></details>
         {geometryTool === 'linked-point' && <><label> x cell <input value={linkedXCell} onChange={(event) => setLinkedXCell(event.target.value.toUpperCase())} /></label><label> y cell <input value={linkedYCell} onChange={(event) => setLinkedYCell(event.target.value.toUpperCase())} /></label></>}
         {geometryTool === 'envelope' && <><label>m(t)<input aria-label="Line family slope m of t" value={envelopeInput.slope} onChange={(event) => setEnvelopeInput((current) => ({ ...current, slope: event.target.value }))} /></label><label>b(t)<input aria-label="Line family intercept b of t" value={envelopeInput.intercept} onChange={(event) => setEnvelopeInput((current) => ({ ...current, intercept: event.target.value }))} /></label><label>t from<input aria-label="Envelope parameter start" type="number" value={envelopeInput.start} onChange={(event) => setEnvelopeInput((current) => ({ ...current, start: event.target.value }))} /></label><label>to<input aria-label="Envelope parameter end" type="number" value={envelopeInput.end} onChange={(event) => setEnvelopeInput((current) => ({ ...current, end: event.target.value }))} /></label><button type="button" className="geometry-finish" onClick={createEnvelope}>Create envelope</button></>}
         {geometryTool === 'transform' && <>
@@ -1081,10 +1108,16 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         <button type="button" onClick={() => setViewport((current) => ({ ...current, scale: Math.max(minScale, current.scale / buttonZoomFactor) }))} aria-label="Zoom out">−</button>
         <button type="button" onClick={() => setViewport(initialViewport)} aria-label="Reset view" className="reset-view">⌖</button>
         <button type="button" onClick={() => setAnalysisOpen((current) => !current)} aria-label={analysisOpen ? 'Hide graph analysis' : 'Analyze graph'} aria-pressed={analysisOpen} className={`analysis-toggle ${analysisOpen ? 'active' : ''}`}>ƒ′</button>
+        <button type="button" onClick={() => setPiAxis((current) => !current)} aria-label={piAxis ? 'Use numeric x-axis' : 'Use π labels on x-axis'} aria-pressed={piAxis} className={piAxis ? 'active axis-mode' : 'axis-mode'} title={piAxis ? 'Cartesian x-axis' : 'π x-axis'}>{piAxis ? 'π' : 'x'}</button>
       </div>
       {analysisOpen && (
         <div className="analysis-panel" role="region" aria-label="Approximate graph analysis">
           <div className="analysis-heading"><strong>Graph analysis</strong><button type="button" onClick={() => setAnalysisOpen(false)} aria-label="Close graph analysis">×</button></div>
+          {selectedAnalysisCurve && <div className="analysis-diagnostics">
+            <label>Curve<select aria-label="Analyze curve" value={selectedAnalysisCurve.id} onChange={(event) => setAnalysisCurveId(event.target.value)}>{visibleCurves.map((item) => <option key={item.id} value={item.id}>Graph {graphs.indexOf(item) + 1}</option>)}</select></label>
+            <div className="analysis-bounds"><label>From<input type="number" aria-label="Analysis interval start" value={analysisBounds.from} onChange={(event) => setAnalysisBounds((current) => ({ ...current, from: event.target.value }))} /></label><label>To<input type="number" aria-label="Analysis interval end" value={analysisBounds.to} onChange={(event) => setAnalysisBounds((current) => ({ ...current, to: event.target.value }))} /></label></div>
+            {curveDiagnostics ? <dl><div><dt>∫ f(x) dx ≈</dt><dd>{formatNumber(curveDiagnostics.integral, 5)}</dd></div><div><dt>Arc length ≈</dt><dd>{formatNumber(curveDiagnostics.arcLength, 5)}</dd></div>{curveDiagnostics.curvature !== null && <div><dt>Curvature near {trace?.graphId === selectedAnalysisCurve.id ? 'trace' : 'midpoint'} ≈</dt><dd>{formatNumber(curveDiagnostics.curvature, 5)}</dd></div>}</dl> : <p>Enter a finite interval without a discontinuity to see diagnostics.</p>}
+          </div>}
           <p>Approximate points for visible y = functions. Select one to trace it.</p>
           {analysis.omittedGraphs > 0 && <p>Showing the first 8 visible 2D functions.</p>}
           {analysis.features.length === 0 ? <div className="analysis-empty">{analysis.curveCount === 0 ? 'Add a visible y = function to analyze.' : 'No roots, turning points, or intersections found here.'}</div> : (

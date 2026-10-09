@@ -11,6 +11,39 @@ export interface TurningPoint extends CurvePoint {
 
 export interface InflectionPoint extends CurvePoint { kind: 'inflection' }
 
+export interface CurveDiagnostics { integral: number; arcLength: number; curvature: number | null }
+
+/** Approximate continuous portions only; reject undefined values and obvious jumps. */
+export function estimateCurveDiagnostics(graph: GraphExpression, parameterA: number, minX: number, maxX: number, anchorX = (minX + maxX) / 2): CurveDiagnostics | null {
+  if (graph.kind !== 'curve' || ![minX, maxX, anchorX].every(Number.isFinite) || maxX <= minX || maxX - minX > 1000) return null
+  const evaluate = (x: number) => graph.evaluate(x, 0, parameterA)
+  const segments = 512
+  const step = (maxX - minX) / segments
+  let previous = evaluate(minX)
+  if (!Number.isFinite(previous) || Math.abs(previous) > 1e6) return null
+  let integral = 0
+  let arcLength = 0
+  for (let index = 1; index <= segments; index += 1) {
+    const x = minX + index * step
+    const current = evaluate(x)
+    const midpoint = evaluate(x - step / 2)
+    if (![current, midpoint].every(Number.isFinite) || Math.max(Math.abs(current), Math.abs(midpoint)) > 1e6) return null
+    if (Math.max(Math.abs(midpoint - previous), Math.abs(current - midpoint)) > 50) return null
+    integral += (previous + 2 * midpoint + current) * step / 4
+    arcLength += Math.hypot(step / 2, midpoint - previous) + Math.hypot(step / 2, current - midpoint)
+    previous = current
+  }
+  const h = Math.max(1e-4, Math.min(0.01, step / 2))
+  const left = evaluate(anchorX - h)
+  const center = evaluate(anchorX)
+  const right = evaluate(anchorX + h)
+  const slope = (right - left) / (2 * h)
+  const secondDerivative = (right - 2 * center + left) / (h * h)
+  const curvature = [left, center, right, slope, secondDerivative].every(Number.isFinite)
+    ? Math.abs(secondDerivative) / Math.pow(1 + slope * slope, 1.5) : null
+  return { integral, arcLength, curvature: Number.isFinite(curvature) ? curvature : null }
+}
+
 const sampleCount = 900
 const maxResults = 64
 

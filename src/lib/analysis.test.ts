@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { compileGraph } from './math'
-import { estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from './analysis'
+import { estimateCurveDiagnostics, estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from './analysis'
 
 describe('2D numerical graph analysis', () => {
   it('finds crossing and touching roots without reporting an asymptote as a root', () => {
@@ -44,5 +44,14 @@ describe('2D numerical graph analysis', () => {
     expect(points).toHaveLength(1)
     expect(points[0].x).toBeCloseTo(0, 3)
     expect(points[0].y).toBeCloseTo(0, 3)
+  })
+
+  it('calculates bounded curve diagnostics and rejects discontinuous intervals', () => {
+    const parabola = compileGraph('y = x^2')
+    const diagnostics = estimateCurveDiagnostics(parabola, 0, 0, 1, 0)
+    expect(diagnostics?.integral).toBeCloseTo(1 / 3, 5)
+    expect(diagnostics?.arcLength).toBeCloseTo(1.47894, 4)
+    expect(diagnostics?.curvature).toBeCloseTo(2, 2)
+    expect(estimateCurveDiagnostics(compileGraph('y = 1/x'), 0, -1, 1)).toBeNull()
   })
 })

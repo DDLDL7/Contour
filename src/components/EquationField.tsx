@@ -25,7 +25,7 @@ export function EquationField({ id, label, value, latex, placeholder, onChange }
     field.placeholder = convertAsciiMathToLatex(placeholder)
     field.mathVirtualKeyboardPolicy = 'manual'
     field.smartFence = true
-    field.value = latex ?? convertAsciiMathToLatex(value)
+    field.value = latex?.trim() ? latex : convertAsciiMathToLatex(value)
 
     const handleInput = () => onChangeRef.current(editorAsciiToGraphSyntax(field.getValue('ascii-math')), field.value)
     field.addEventListener('input', handleInput)
@@ -41,7 +41,7 @@ export function EquationField({ id, label, value, latex, placeholder, onChange }
 
   useEffect(() => {
     const field = fieldRef.current
-    const displayValue = latex ?? convertAsciiMathToLatex(value)
+    const displayValue = latex?.trim() ? latex : convertAsciiMathToLatex(value)
     if (field && field.value !== displayValue) {
       field.setValue(displayValue, { silenceNotifications: true })
     }

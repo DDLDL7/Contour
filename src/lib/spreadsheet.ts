@@ -43,7 +43,7 @@ export function evaluateSpreadsheet(data: SpreadsheetData, definitions: Readonly
     if (visiting.has(key)) { values[key] = { raw, value: null, error: 'Circular cell reference' }; return Number.NaN }
     const literal = Number(raw)
     if (Number.isFinite(literal) && raw.trim() !== '') { values[key] = { raw, value: literal }; return literal }
-    if (!raw.startsWith('=')) { values[key] = { raw, value: null, error: 'Enter a number or a formula beginning with =' }; return Number.NaN }
+    if (!raw.startsWith('=')) { values[key] = { raw, value: null }; return Number.NaN }
     visiting.add(key)
     try {
       const references: { sheet: SpreadsheetSheet; address: string; symbol: string }[] = []
@@ -64,8 +64,10 @@ export function evaluateSpreadsheet(data: SpreadsheetData, definitions: Readonly
       const scope: Record<string, number> = { ...definitions, a: parameterA }
       for (const ref of references) {
         scope[ref.symbol] = resolve(ref.sheet, ref.address)
-        const dependencyError = values[`${ref.sheet.id}:${ref.address}`]?.error
+        const dependency = values[`${ref.sheet.id}:${ref.address}`]
+        const dependencyError = dependency?.error
         if (dependencyError) throw new Error(dependencyError)
+        if (dependency?.value === null) throw new Error(`${ref.address} does not contain a number`)
       }
       const result = compiled.evaluate(scope)
       if (!Number.isFinite(result)) throw new Error('Formula did not produce a finite number')

@@ -1,0 +1,287 @@
+/* Contour instrument workspace. The supplied 2D/3D comps are the visual source. */
+.app-shell {
+  --bench: #0c0e11;
+  --surface: #111316;
+  --panel: #1a1c1f;
+  --raised: #22252a;
+  --line: #2c3038;
+  --ink: #e2e2e6;
+  --muted: #a2a8b7;
+  --blue: #b3c5ff;
+  --green: #72daae;
+  --orange: #ffb599;
+  background: var(--bench);
+  color: var(--ink);
+  height: 100dvh;
+  min-height: 590px;
+  overflow: hidden;
+}
+.app-shell[data-theme="light"] {
+  --bench: #eef0f3;
+  --surface: #fbfbfc;
+  --panel: #fff;
+  --raised: #f3f4f6;
+  --line: #d8dde6;
+  --ink: #20242d;
+  --muted: #586374;
+  --blue: #255fce;
+  --green: #147455;
+  --orange: #a84822;
+}
+.app-shell :is(button,input,select,textarea,summary):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.app-shell .app-header {
+  height: 58px; flex: 0 0 58px; display: flex; justify-content: space-between;
+  gap: 8px; padding: 0 16px; background: var(--bench); border-color: var(--line);
+}
+.header-identity, .header-history, .app-shell .view-switch, .app-shell .header-actions { display: flex; align-items: center; }
+.header-identity { gap: 11px; min-width: 0; flex: 0 1 auto; }
+.app-shell .brand { gap: 10px; flex: 0 0 auto; }
+.app-shell .brand-mark { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 5px; }
+.app-shell .brand-name { font: 700 19px/1 Georgia, Cambria, serif; color: var(--ink); letter-spacing: -.035em; }
+.app-shell .brand-divider { height: 25px; margin: 0 3px; background: var(--line); }
+.app-shell .project-title { width: clamp(122px, 11vw, 176px); padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); font: 500 12px/1.25 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; letter-spacing: 0; text-overflow: ellipsis; }
+.app-shell .project-title:hover, .app-shell .project-title:focus { margin: 0; padding: 6px 9px; background: var(--raised); border-color: var(--blue); }
+.app-shell .save-status { margin: 0; color: var(--green); white-space: nowrap; font-size: 11px; }
+.app-shell .status-dot { background: var(--green); }
+.header-history { gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); }
+.app-shell .icon-button { color: var(--muted); border-radius: 3px; }
+.app-shell .icon-button:hover { background: var(--raised); color: var(--ink); }
+.app-shell .view-switch { height: 100%; flex: 0 1 auto; min-width: 0; padding: 0; gap: 0; border-radius: 0; background: transparent; overflow-x: auto; scrollbar-width: none; }
+.app-shell .view-switch::-webkit-scrollbar { display: none; }
+.app-shell .view-switch button { height: 100%; width: auto; min-width: max-content; padding: 0 13px; gap: 5px; border-radius: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: 500 13px/1.1 Georgia, Cambria, serif; box-shadow: none; }
+.app-shell .view-switch button:hover { background: var(--panel); color: var(--ink); }
+.app-shell .view-switch button.active { color: var(--blue); background: var(--raised); border-bottom-color: var(--blue); box-shadow: none; }
+.view-switch .nav-icon { display: none; }
+.view-switch kbd { font: 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); opacity: .7; }
+.app-shell .header-actions { gap: 5px; flex: 0 0 auto; }
+.app-shell .header-button { height: 33px; padding: 0 9px; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; color: var(--ink); font: 500 12px/1 Georgia, Cambria, serif; }
+.app-shell .header-button:hover, .app-shell .header-button[aria-pressed="true"] { background: var(--raised); color: var(--blue); }
+.app-shell .header-icon { margin: 0; width: 32px; height: 32px; border: 1px solid var(--line); background: var(--panel); }
+.app-shell .workspace { display: grid; grid-template-columns: clamp(215px,22vw,395px) clamp(320px,29.5vw,520px) minmax(0,1fr); flex: 1; min-height: 0; }
+.app-shell .workspace.rail-hidden { grid-template-columns: clamp(320px,29.5vw,520px) minmax(0,1fr); }
+.app-shell .workspace:is(.view-tools,.view-sheet,.view-notebook) { grid-template-columns: minmax(270px,315px) minmax(0,1fr); }
+.app-shell .workspace:is(.view-tools,.view-sheet,.view-notebook) .project-rail { display: none; }
+.project-rail { min-width: 0; display: flex; flex-direction: column; background: var(--bench); border-right: 1px solid var(--line); overflow: hidden; }
+.rail-hidden .project-rail { display: none; }
+.rail-heading { height: 48px; flex: 0 0 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--line); color: var(--muted); font: 600 12px Georgia, Cambria, serif; letter-spacing: .045em; text-transform: uppercase; }
+.rail-heading span { display: flex; align-items: center; gap: 8px; }
+.rail-heading button, .scene-item-top button { display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 0; background: transparent; color: var(--muted); }
+.rail-heading button:hover, .scene-item-top button:hover { color: var(--blue); background: var(--raised); }
+.rail-items { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; }
+.rail-item { display: flex; width: 100%; align-items: center; gap: 7px; min-height: 48px; margin-bottom: 7px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; text-align: left; background: var(--panel); color: var(--ink); }
+.rail-item:hover { background: var(--raised); border-color: var(--blue); }
+.rail-index { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.rail-swatch { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
+.rail-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 12px Georgia, Cambria, serif; }
+.rail-state, .rail-error { color: #ffb4ab; }
+.rail-item svg { color: var(--muted); flex: 0 0 auto; }
+.rail-empty { padding: 8px; color: var(--muted); font-size: 12px; }
+.rail-footer { display: flex; justify-content: space-between; gap: 6px; padding: 11px 15px; border-top: 1px solid var(--line); color: var(--muted); white-space: nowrap; font: 10px Georgia, Cambria, serif; }
+.app-shell .expression-panel { max-height: none; border-color: var(--line); background: var(--bench); }
+.app-shell .expression-heading { align-items: center; padding: 9px 16px; min-height: 48px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.app-shell .expression-heading h1 { color: var(--ink); font: 600 17px/1.1 Georgia, Cambria, serif; }
+.app-shell .expression-heading p { display: none; }
+.app-shell .add-top { background: transparent; border: 0; }
+.expression-commands { display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
+.app-shell .expression-commands .add-expression { flex: 0 0 auto; margin: 0; padding: 8px 11px; border: 0; border-radius: 3px; background: var(--blue); color: #142a5f; font-size: 12px; }
+.expression-search { min-width: 0; flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 7px; color: var(--muted); }
+.expression-search input { width: 100%; min-width: 0; height: 30px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; }
+.expression-search button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); }
+.app-shell .expression-list { padding: 9px 6px 0; }
+.app-shell .expression-card { margin: 0 0 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); box-shadow: none; }
+.app-shell .expression-card:focus-within { border-color: var(--blue); box-shadow: none; }
+.app-shell .expression-line { min-height: 48px; padding: 0 8px; gap: 7px; }
+.app-shell .expression-index { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.app-shell .graph-swatch { width: 12px; height: 12px; border-radius: 3px; }
+.row-color-action { position: relative; display: grid; place-items: center; flex: 0 0 18px; width: 18px; height: 22px; cursor: pointer; }
+.row-color-action input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.row-color-action:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+.app-shell .equation-field { min-height: 42px; padding: 6px 0; color: var(--ink); font-size: 17px; }
+.app-shell .expression-type, .app-shell .expression-error { margin: -2px 12px 11px 43px; color: var(--muted); font: 11px Georgia, Cambria, serif; }
+.app-shell .expression-error { color: #ffb4ab; }
+.app-shell .has-error { background: color-mix(in srgb, var(--panel) 82%, #93000a); border-color: #75404a; }
+.filter-empty { padding: 8px 12px; color: var(--muted); font-size: 12px; }
+.app-shell .empty-expressions { margin: 4px 8px 12px; border: 1px dashed var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); }
+.app-shell .empty-expressions strong { color: var(--ink); }
+.app-shell .graph-examples { display: block; margin: 8px 14px 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.app-shell .graph-examples summary { padding: 6px 2px; color: var(--muted); cursor: pointer; font-size: 11px; }
+.app-shell .graph-examples summary:hover { color: var(--blue); }
+.example-buttons { display: flex; flex-wrap: wrap; gap: 5px; padding: 7px 0 4px; }
+.app-shell .graph-examples button { border-color: var(--line); border-radius: 3px; background: var(--panel); color: var(--muted); }
+.app-shell .graph-examples button:hover { color: var(--blue); background: var(--raised); }
+.app-shell .parameter-panel { margin-top: 6px; padding: 16px; border-color: var(--line); }
+.app-shell .parameter-head { color: var(--ink); font: 600 15px Georgia, Cambria, serif; }
+.app-shell .parameter-count, .app-shell .slider-ends, .app-shell .save-status { font-variant-numeric: tabular-nums; }
+.app-shell .parameter-label label { color: var(--green); }
+.app-shell .parameter-slider { accent-color: var(--green); }
+.app-shell .parameter-label output { background: var(--panel); border-color: var(--line); color: var(--ink); }
+.app-shell .parameter-animate { background: var(--panel); border-color: var(--line); color: var(--green); }
+.app-shell .parameter-head-actions :is(button,select), .app-shell .parameter-settings form :is(input,button) { background: var(--panel); border-color: var(--line); color: var(--ink); }
+.app-shell .sidebar-footer { padding: 13px 16px; border-top: 1px solid var(--line); }
+.scene-elements { padding: 8px 10px 18px; border-top: 1px solid var(--line); }
+.scene-section-heading { display: flex; justify-content: space-between; padding: 7px 3px 12px; color: var(--muted); font: 11px Georgia, Cambria, serif; text-transform: uppercase; letter-spacing: .04em; }
+.scene-item { margin-bottom: 8px; padding: 11px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); }
+.scene-item-top { display: flex; align-items: center; gap: 7px; }
+.scene-item-top strong { flex: 1; font: 600 13px Georgia, Cambria, serif; color: var(--ink); }
+.scene-item-top .scene-select { flex: 1; width: auto; justify-content: flex-start; color: var(--ink); font: 600 13px Georgia, Cambria, serif; }
+.scene-item-top .scene-select[aria-pressed="true"] { color: var(--blue); }
+.scene-index { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.scene-dot { width: 10px; height: 10px; border-radius: 50%; }
+.scene-item p { margin: 10px 0 0; color: var(--muted); font: 12px Georgia, Cambria, serif; }
+.scene-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; margin-top: 10px; }
+.scene-metrics label { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.scene-metrics input { width: 100%; margin-top: 4px; padding: 6px 3px; border: 1px solid var(--line); border-radius: 2px; background: var(--bench); color: var(--ink); text-align: center; font-size: 11px; }
+.scene-vector-inputs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; margin-top: 9px; }
+.scene-vector-inputs label { display: grid; gap: 3px; color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.scene-vector-inputs input { min-width: 0; width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bench); color: var(--ink); font-size: 11px; }
+.app-shell .scene-vector-error { margin: 7px 0 0; color: #ffb4ab; font-size: 10px; }
+.scene-add-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.scene-add-grid button { border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; background: var(--panel); color: var(--blue); font-size: 11px; }
+.app-shell .visual-panel { background: var(--surface); }
+.app-shell .graph-wrap { min-height: 0; display: block; }
+.app-shell .graph-wrap.is-split { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+.primary-workspace, .secondary-workspace { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+.secondary-workspace { border-left: 1px solid var(--line); }
+.split-heading { position: absolute; top: 9px; left: 10px; z-index: 5; padding: 5px 8px; border: 1px solid var(--line); background: var(--panel); color: var(--blue); font-size: 11px; }
+.app-shell .graph-stage { min-height: 0; background: var(--surface); }
+.app-shell .geometry-toolbar { top: 16px; left: 16px; max-width: calc(100% - 85px); flex-wrap: wrap; padding: 5px; gap: 2px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); box-shadow: none; }
+.geometry-main-tools { display: flex; align-items: center; gap: 3px; }
+.app-shell .geometry-main-tools button { width: auto; padding: 0 8px; gap: 6px; }
+.geometry-more { position: relative; }
+.geometry-more summary, .solid-menu summary { display: flex; align-items: center; justify-content: center; min-height: 29px; padding: 0 9px; border-radius: 2px; color: var(--muted); cursor: pointer; font: 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; list-style: none; text-transform: capitalize; }
+.geometry-more summary::-webkit-details-marker, .solid-menu summary::-webkit-details-marker { display: none; }
+.geometry-more summary:hover, .solid-menu summary:hover { background: var(--raised); color: var(--ink); }
+.geometry-more[open] > div { position: absolute; top: 36px; left: 0; z-index: 15; display: grid; grid-template-columns: repeat(2,minmax(110px,1fr)); gap: 3px; width: 254px; max-height: min(390px,60vh); overflow-y: auto; padding: 6px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); box-shadow: 0 8px 24px #0007; }
+.app-shell .geometry-more button { width: 100%; padding: 0 7px; justify-content: flex-start; gap: 7px; }
+.app-shell .geometry-toolbar button { width: 30px; min-height: 29px; border-radius: 2px; color: var(--muted); }
+.app-shell .geometry-toolbar button:hover { background: var(--raised); color: var(--ink); }
+.app-shell .geometry-toolbar button.active { background: var(--blue); color: #172c66; }
+.app-shell .geometry-toolbar :is(select,input) { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.app-shell .geometry-hint { color: var(--muted); }
+.app-shell .graph-controls { top: 16px; right: 16px; padding: 4px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); box-shadow: none; }
+.app-shell .graph-controls button { border-radius: 2px; background: var(--panel); color: var(--muted); }
+.app-shell .graph-controls button:hover { background: var(--raised); color: var(--ink); }
+.app-shell .graph-controls :is(.analysis-toggle,.axis-mode).active { background: var(--blue); color: #172c66; }
+.app-shell .graph-controls .axis-mode { font: italic 17px Georgia, Cambria, serif; border-top: 1px solid var(--line); }
+.app-shell .graph-controls .solid-controls { max-height: min(55vh,450px); overflow-y: auto; border-color: var(--line); }
+.app-shell .graph-controls-3d { align-items: center; }
+.app-shell .graph-controls-3d button { min-width: 38px; height: 31px; font-size: 11px; }
+.app-shell .graph-controls-3d button.active { background: var(--blue); color: #142a5f; }
+.camera-presets { display: grid; width: 100%; gap: 1px; padding: 4px 0; border-block: 1px solid var(--line); }
+.app-shell .graph-controls-3d .camera-presets button { width: 100%; min-width: 38px; height: 27px; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.slice-hud { position: absolute; top: 68px; right: calc(100% + 8px); display: grid; gap: 6px; width: 165px; padding: 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--muted); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.slice-hud input { width: 100%; accent-color: var(--green); }
+.solid-menu { position: relative; }
+.solid-menu[open] .solid-controls { position: absolute; top: 0; right: calc(100% + 11px); z-index: 12; width: 210px; max-height: min(520px,75vh); overflow-y: auto; padding: 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); box-shadow: 0 8px 24px #0007; }
+.app-shell .graph-controls-3d .solid-controls button { width: 100%; height: 27px; justify-content: flex-start; padding-left: 8px; }
+.app-shell .graph-controls-3d .solid-controls .field-input { display: grid; gap: 3px; color: var(--muted); font-size: 11px; }
+.app-shell .graph-controls-3d .solid-controls .field-input input { width: 100%; padding: 5px; border: 1px solid var(--line); background: var(--bench); color: var(--ink); }
+.app-shell .analysis-panel { left: auto; top: auto; right: 17px; bottom: 58px; width: min(330px,calc(100% - 35px)); max-height: min(390px,60%); border: 1px solid var(--line); border-radius: 3px; background: var(--panel); box-shadow: none; }
+.scene-inspector { position: absolute; z-index: 4; right: 16px; bottom: 18px; width: min(325px,calc(100% - 32px)); padding: 11px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px #0006; }
+.scene-inspector-head { display: flex; align-items: center; gap: 7px; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
+.scene-inspector-head strong { flex: 1; text-transform: capitalize; font: 600 14px Georgia, Cambria, serif; }
+.scene-inspector-head button { border: 0; background: transparent; color: var(--muted); }
+.scene-inspector dl { margin: 9px 0 0; }
+.scene-inspector dl div { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 11px; }
+.scene-inspector dt { color: var(--muted); }
+.scene-inspector dd { margin: 0; min-width: 0; max-width: 65%; overflow-wrap: anywhere; text-align: right; font-variant-numeric: tabular-nums; }
+.app-shell .analysis-heading { color: var(--ink); font: 600 15px Georgia, Cambria, serif; }
+.app-shell .analysis-panel p, .app-shell .analysis-empty { color: var(--muted); }
+.analysis-diagnostics { margin: 9px 0 13px; padding: 9px; border: 1px solid var(--line); background: var(--bench); }
+.analysis-diagnostics label { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.analysis-diagnostics :is(select,input) { min-width: 0; width: 100%; height: 28px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--panel); color: var(--ink); font-size: 11px; }
+.analysis-bounds { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 7px; }
+.analysis-diagnostics dl { margin: 9px 0 0; border-top: 1px solid var(--line); }
+.analysis-diagnostics dl div { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 10px; }
+.analysis-diagnostics dt { color: var(--muted); }
+.analysis-diagnostics dd { margin: 0; color: var(--blue); font-variant-numeric: tabular-nums; }
+.app-shell .analysis-results button { color: var(--ink); border: 1px solid var(--line); border-radius: 2px; margin-bottom: 4px; background: var(--bench); }
+.app-shell .analysis-results button:hover { background: var(--raised); }
+.app-shell .trace-card, .app-shell .coordinate-readout, .app-shell .axis-key { border: 1px solid var(--line); border-radius: 2px; background: var(--panel); color: var(--ink); box-shadow: none; }
+.app-shell .visual-footer { min-height: 31px; padding: 0 14px; border-color: var(--line); background: var(--bench); color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.app-shell .visual-footer span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.app-shell .visual-footer span:last-child { flex: 0 0 auto; white-space: nowrap; }
+.app-shell .visual-footer kbd { color: var(--blue); border-color: var(--line); }
+.app-shell .graph-empty { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); box-shadow: none; }
+.app-shell .graph-empty strong { color: var(--ink); }
+.app-shell .graph-empty p { color: var(--muted); }
+.app-shell .graph-empty-icon { border-radius: 3px; background: var(--raised); color: var(--blue); }
+.app-shell .math-tools-view, .app-shell .spreadsheet-view, .app-shell .notebook-view { background: var(--surface); }
+.app-shell .math-tool-card, .app-shell .spreadsheet-grid-card, .app-shell .spreadsheet-chart-card, .app-shell .probability-card, .app-shell .inference-card, .app-shell .notebook-cell, .app-shell .notebook-empty { border-radius: 4px; border-color: var(--line); background: var(--panel); box-shadow: none; }
+.app-shell .math-tools-intro h2, .app-shell .spreadsheet-heading h2, .app-shell .notebook-heading h2 { color: var(--ink); font: 600 25px Georgia, Cambria, serif; }
+.app-shell .math-tools-intro p, .app-shell .spreadsheet-heading p, .app-shell .notebook-heading p { color: var(--muted); }
+.app-shell[data-theme] :is(.math-tools-view,.spreadsheet-view,.notebook-view) { background: var(--surface); }
+.app-shell[data-theme] :is(.math-tool-card,.spreadsheet-grid-card,.spreadsheet-chart-card,.probability-card,.inference-card,.notebook-cell,.notebook-empty) { border-color: var(--line); border-radius: 3px; background: var(--panel); box-shadow: none; }
+.app-shell[data-theme] :is(.math-tool-group h3,.math-tool-label,.math-tool-options label,.spreadsheet-card-heading p,.spreadsheet-card-heading > span,.probability-fields label,.notebook-cell-head,.notebook-operation,.notebook-visibility > label:not(.notebook-check),.notebook-input-cell > label,.notebook-parameter-form label) { color: var(--muted); }
+.app-shell[data-theme] :is(.math-tool-card h3,.spreadsheet-card-heading h3,.probability-heading h3,.notebook-empty strong) { color: var(--ink); }
+.app-shell[data-theme] .math-tool-list button { border-radius: 3px; color: var(--muted); }
+.app-shell[data-theme] .math-tool-list button:hover { background: var(--raised); color: var(--ink); }
+.app-shell[data-theme] .math-tool-list button.active { border-color: var(--line); background: var(--raised); color: var(--blue); }
+.app-shell[data-theme] .math-tool-card-header { border-bottom-color: var(--line); }
+.app-shell[data-theme] .math-tool-card-icon { border-radius: 3px; background: var(--raised); color: var(--blue); }
+.app-shell[data-theme] :is(.math-tool-equation,.math-tool-data,.math-tool-options input,.notebook-equation,.notebook-cell textarea,.notebook-visibility input[type="text"],.notebook-visibility select,.notebook-input-cell input,.notebook-input-cell select,.notebook-operation select,.probability-fields input,.probability-fields select,.spreadsheet-chart-options select,.regression-picker select) { border-color: var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); }
+.app-shell[data-theme] :is(.math-tool-run,.probability-fields button) { border-radius: 3px; background: var(--blue); color: #142a5f; }
+.app-shell[data-theme] :is(.math-tool-result,.notebook-answer,.probability-result > div,.inference-result,.regression-summary) { border-color: var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); }
+.app-shell[data-theme] :is(.math-result-field,.math-tool-result .math-result-text,.probability-result b,.inference-result strong,.regression-summary strong) { color: var(--green); }
+.app-shell[data-theme] :is(.notebook-toolbar button,.notebook-empty button,.notebook-parameter-form button) { border-color: var(--line); border-radius: 3px; background: var(--raised); color: var(--blue); }
+.app-shell[data-theme] :is(.notebook-toolbar button,.notebook-empty button,.notebook-parameter-form button):hover { background: var(--bench); }
+.app-shell[data-theme] .notebook-preview { background: var(--bench); border-left-color: var(--blue); color: var(--ink); }
+.app-shell[data-theme] .notebook-check { border-color: var(--line); border-radius: 3px; color: var(--ink); }
+.app-shell[data-theme] .spreadsheet-tabs { border-bottom-color: var(--line); }
+.app-shell[data-theme] .spreadsheet-tabs button { color: var(--muted); border-radius: 2px 2px 0 0; }
+.app-shell[data-theme] .spreadsheet-tabs button.active { background: var(--raised); color: var(--blue); box-shadow: 0 -2px var(--blue) inset; }
+.app-shell[data-theme] .spreadsheet-grid :is(th,td) { border-color: var(--line); }
+.app-shell[data-theme] .spreadsheet-grid :is(thead th,tbody th) { background: var(--raised); color: var(--muted); }
+.app-shell[data-theme] .spreadsheet-grid td input { color: var(--ink); }
+.app-shell[data-theme] .spreadsheet-grid td input:focus { border-color: var(--blue); background: var(--raised); box-shadow: none; }
+.app-shell[data-theme] .spreadsheet-note { border-top-color: var(--line); color: var(--muted); }
+.app-shell[data-theme] .spreadsheet-grid td.cell-error { background: color-mix(in srgb, var(--panel) 82%, #93000a); }
+.app-shell .toast, .app-shell .help-dialog { border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); }
+.app-shell .help-dialog p { color: var(--muted); }
+.app-shell .geometry-toolbar .geometry-main-tools button { width: auto; min-width: 62px; padding: 0 8px; display: inline-flex; gap: 6px; white-space: nowrap; }
+.app-shell .geometry-toolbar .geometry-more button { width: 100%; padding: 0 7px; justify-content: flex-start; gap: 7px; }
+.app-shell .geometry-toolbar .geometry-main-tools button svg,
+.app-shell .geometry-toolbar .geometry-more button svg { flex: 0 0 16px; }
+@media (max-width: 1540px) {
+  .app-shell .save-status, .view-switch kbd { display: none; }
+  .app-shell .view-switch button { padding: 0 9px; }
+  .help-button span { display: none; }
+}
+@media (max-width: 1180px) {
+  .app-shell .rail-toggle { display: none; }
+  .app-shell .workspace { grid-template-columns: 345px minmax(0,1fr); }
+  .app-shell .workspace.rail-hidden { grid-template-columns: 345px minmax(0,1fr); }
+  .project-rail { display: none; }
+  .app-shell .view-switch button { padding: 0 8px; font-size: 12px; }
+  .app-shell .brand-name { font-size: 18px; }
+  .app-shell .project-title { width: 120px; }
+  .header-history { display: none; }
+  .app-shell .visual-footer span:last-child { display: none; }
+}
+@media (max-width: 800px) {
+  .app-shell { height: auto; min-height: 100dvh; overflow: visible; }
+  .app-shell .app-header { height: auto; min-height: 60px; flex-basis: auto; flex-wrap: wrap; padding: 8px 10px 0; gap: 2px; }
+  .header-identity { flex: 1; }
+  .app-shell .header-actions { order: 1; }
+  .app-shell .view-switch { order: 2; width: 100%; height: 43px; justify-content: space-between; }
+  .app-shell .view-switch button { flex: 1; justify-content: center; font: 12px Georgia, Cambria, serif; }
+  .view-switch .nav-icon { display: block; }
+  .app-shell .workspace, .app-shell .workspace.rail-hidden { display: flex; flex-direction: column; min-height: calc(100dvh - 103px); }
+  .app-shell .visual-panel { order: 1; height: min(58vh,620px); min-height: 340px; }
+  .app-shell .expression-panel { order: 2; max-height: none; overflow: visible; }
+  .app-shell .graph-wrap.is-split { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .app-shell .split-button { display: none; }
+  .app-shell .brand-name { display: none; }
+  .app-shell .brand-divider { display: none; }
+  .app-shell .project-title { width: 140px; }
+  .app-shell .header-button { width: 32px; padding: 0; justify-content: center; }
+  .app-shell .header-button span { display: none; }
+  .app-shell .view-switch button { min-width: 43px; padding: 0 5px; }
+  .app-shell .view-switch button span, .app-shell .view-switch button kbd { display: none; }
+  .app-shell .graph-wrap.is-split { display: block; }
+  .app-shell .graph-wrap.is-split .secondary-workspace { display: none; }
+  .app-shell .geometry-toolbar { max-width: calc(100% - 75px); }
+  .app-shell .analysis-panel { max-height: 42%; }
+}

@@ -30,7 +30,8 @@ export interface Project {
 export const PROJECT_KEY = 'contour-project-v1'
 export const PROJECT_VERSION = 2
 
-export const graphColors = ['#286fc0', '#df7752', '#29967a', '#805fc2', '#c39a24']
+export const graphColors = ['#4589ff', '#72daae', '#ffb599', '#a56eff', '#f1c21b']
+const legacyGraphColors = ['#286fc0', '#df7752', '#29967a']
 
 const legacyStarterExpressions = [
   'y = a*sin(x)',
@@ -47,7 +48,7 @@ export function isUntouchedLegacyStarter(value: Partial<Project>): boolean {
   return value.title === 'My graphs' && value.parameterA === 2
     && Array.isArray(value.expressions) && value.expressions.length === legacyStarterExpressions.length
     && value.expressions.every((row, index) => row.text === legacyStarterExpressions[index]
-      && row.color === graphColors[index] && row.visible === true && row.latex === undefined)
+      && row.color === legacyGraphColors[index] && row.visible === true && row.latex === undefined)
     && noObjects(value.geometry) && noObjects(value.solids) && noObjects(value.vectorFields) && noObjects(value.parameters)
     && noObjects(value.notebook)
     && (range === undefined || (range.min === -5 && range.max === 5 && range.step === 0.1 && (range.animationSeconds === undefined || range.animationSeconds === 4)))

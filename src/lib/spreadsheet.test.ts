@@ -15,6 +15,14 @@ describe('spreadsheet formula evaluation', () => {
     expect(result.C1.error).toBeTruthy()
   })
 
+  it('shows text headers without errors but rejects them in numeric formulas', () => {
+    const result = evaluateSpreadsheet({ cells: { A1: 'x', B1: 'y', A2: '1', B2: '=A2+1', C2: '=A1+1' } })
+    expect(result.A1).toEqual({ raw: 'x', value: null })
+    expect(result.B1).toEqual({ raw: 'y', value: null })
+    expect(result.B2.value).toBe(2)
+    expect(result.C2.error).toContain('A1 does not contain a number')
+  })
+
   it('supports multiple sheets and formulas that depend on another sheet', () => {
     const data: SpreadsheetData = {
       cells: { A1: '9' },

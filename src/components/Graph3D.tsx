@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { OBJExporter } from 'three/addons/exporters/OBJExporter.js'
+import { STLExporter } from 'three/addons/exporters/STLExporter.js'
 import { evaluateSpatialPoint, type PlottableGraph } from '../lib/math'
 import { sampleImplicitSurface, sampleParametricSurface, type MeshSamples } from '../lib/meshing'
 import { printableNetSvg, type SolidObject, type SolidShape } from '../lib/solids'
@@ -23,7 +25,9 @@ interface Props {
 interface SceneState {
   renderer: THREE.WebGLRenderer
   scene: THREE.Scene
-  camera: THREE.PerspectiveCamera
+  camera: THREE.PerspectiveCamera | THREE.OrthographicCamera
+  perspectiveCamera: THREE.PerspectiveCamera
+  orthographicCamera: THREE.OrthographicCamera
   controls: OrbitControls
   surfaces: THREE.Group
   grid: THREE.GridHelper
@@ -138,6 +142,7 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
   const [wireframe, setWireframe] = useState(false)
   const [sectionEnabled, setSectionEnabled] = useState(false)
   const [sectionHeight, setSectionHeight] = useState(1)
+  const [projection, setProjection] = useState<'perspective' | 'orthographic'>('perspective')
   const [fieldInput, setFieldInput] = useState({ fx: '-y', fy: 'x', fz: '0' })
   const [fieldError, setFieldError] = useState('')
   const [error, setError] = useState('')
@@ -160,6 +165,8 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000)
     camera.position.set(14, 12, 16)
+    const orthographicCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1000)
+    orthographicCamera.position.copy(camera.position)
     const controls = new OrbitControls(camera, canvas)
     controls.enableDamping = false
     controls.minDistance = 3
@@ -179,7 +186,7 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     const surfaces = new THREE.Group()
     scene.add(surfaces)
 
-    const render = () => renderer.render(scene, camera)
+    const render = () => renderer.render(scene, sceneRef.current?.camera ?? camera)
     controls.addEventListener('change', render)
     const observer = new ResizeObserver(() => {
       const width = container.clientWidth
@@ -188,10 +195,15 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
       renderer.setSize(width, height, false)
       camera.aspect = width / height
       camera.updateProjectionMatrix()
+      orthographicCamera.left = -10 * width / height
+      orthographicCamera.right = 10 * width / height
+      orthographicCamera.top = 10
+      orthographicCamera.bottom = -10
+      orthographicCamera.updateProjectionMatrix()
       render()
     })
     observer.observe(container)
-    sceneRef.current = { renderer, scene, camera, controls, surfaces, grid }
+    sceneRef.current = { renderer, scene, camera, perspectiveCamera: camera, orthographicCamera, controls, surfaces, grid }
     render()
 
     return () => {
@@ -211,7 +223,7 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
   useEffect(() => {
     const state = sceneRef.current
     if (!state) return
-    state.renderer.setClearColor(darkMode ? '#111417' : '#ffffff')
+    state.renderer.setClearColor(darkMode ? '#111316' : '#ffffff')
     const materials = Array.isArray(state.grid.material) ? state.grid.material : [state.grid.material]
     materials[0]?.color.set(darkMode ? '#687681' : '#a9b9c7')
     materials[1]?.color.set(darkMode ? '#303b44' : '#e1e7ec')
@@ -396,6 +408,23 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
+  function exportMesh(format: 'obj' | 'stl') {
+    const surfaces = sceneRef.current?.surfaces
+    if (!surfaces) return
+    let meshes = 0
+    surfaces.traverse((object) => { if (object instanceof THREE.Mesh) meshes += 1 })
+    if (!meshes) { setFieldError('Add a visible surface or solid before exporting a mesh.'); return }
+    const data = format === 'obj' ? new OBJExporter().parse(surfaces) : new STLExporter().parse(surfaces)
+    const blob = new Blob([data], { type: format === 'obj' ? 'text/plain' : 'model/stl' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `contour-scene.${format}`
+    anchor.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setFieldError('')
+  }
+
   function addVectorField() {
     try {
       compileScalarDefinition(fieldInput.fx, ['x', 'y', 'z', ...Object.keys(definitions)])
@@ -406,32 +435,54 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     } catch (cause) { setFieldError(cause instanceof Error ? cause.message : 'Check the vector field expressions.') }
   }
 
+  function moveCamera(view: 'iso' | 'top' | 'front' | 'right') {
+    const state = sceneRef.current
+    if (!state) return
+    const offset: [number, number, number] = view === 'top' ? [0, 22, 0.001] : view === 'front' ? [0, 0, 22] : view === 'right' ? [22, 0, 0] : [14, 12, 16]
+    state.camera.position.set(...offset)
+    state.controls.target.set(0, 0, 0)
+    state.controls.update()
+    state.renderer.render(state.scene, state.camera)
+  }
+
+  function toggleProjection() {
+    const state = sceneRef.current
+    const next = projection === 'perspective' ? 'orthographic' : 'perspective'
+    if (state) {
+      const camera = next === 'perspective' ? state.perspectiveCamera : state.orthographicCamera
+      camera.position.copy(state.camera.position)
+      camera.quaternion.copy(state.camera.quaternion)
+      state.camera = camera
+      state.controls.object = camera
+      state.controls.update()
+      state.renderer.render(state.scene, camera)
+    }
+    setProjection(next)
+  }
+
   return (
     <div className="graph-stage" ref={containerRef}>
       {error ? <div className="graph-error">{error}</div> : <canvas ref={canvasRef} className="graph-canvas" aria-label="Interactive three-dimensional graph. Drag to rotate and scroll to zoom." role="img" />}
       {!error && (
         <>
-          <div className="graph-controls" aria-label="3D graph controls">
-            <button type="button" onClick={() => {
-              const state = sceneRef.current
-              if (!state) return
-              state.camera.position.set(14, 12, 16)
-              state.controls.target.set(0, 0, 0)
-              state.controls.update()
-            }} aria-label="Reset 3D view" className="reset-view">⌖</button>
+          <div className="graph-controls graph-controls-3d" aria-label="3D graph controls">
+            <button type="button" onClick={() => moveCamera('iso')} aria-label="Reset 3D view" className="reset-view">⌖</button>
+            <div className="camera-presets" role="group" aria-label="Camera views">{(['iso', 'top', 'front', 'right'] as const).map((view) => <button key={view} type="button" onClick={() => moveCamera(view)} aria-label={`${view} view`}>{view === 'front' ? 'FRT' : view === 'right' ? 'RGT' : view.toUpperCase()}</button>)}</div>
+            <button type="button" onClick={toggleProjection} aria-label={`Switch to ${projection === 'perspective' ? 'orthographic' : 'perspective'} projection`} title={`Current projection: ${projection}`}>{projection === 'perspective' ? 'PERSP' : 'ORTHO'}</button>
             <button type="button" onClick={() => setWireframe((current) => !current)} aria-label={wireframe ? 'Show solid surface' : 'Show wireframe'} className="wireframe-toggle">{wireframe ? 'Solid' : 'Mesh'}</button>
-            <div className="solid-controls" aria-label="3D solid constructions">
+            <button type="button" aria-pressed={sectionEnabled} className={sectionEnabled ? 'active' : ''} onClick={() => setSectionEnabled((enabled) => !enabled)} title="Toggle cross-section">Slice</button>
+            {sectionEnabled && <label className="slice-hud">Slice z = {sectionHeight.toFixed(1)}<input aria-label="Cross-section z height" type="range" min="-2" max="4" step="0.1" value={sectionHeight} onChange={(event) => setSectionHeight(Number(event.target.value))} /></label>}
+            <details className="solid-menu"><summary>Objects</summary><div className="solid-controls" aria-label="3D solid constructions">
               {(['sphere', 'cube', 'cylinder', 'cone', 'pyramid'] as SolidShape[]).map((shape) => <button key={shape} type="button" onClick={() => addSolid(shape)}>+ {shape[0].toUpperCase() + shape.slice(1)}</button>)}
               <button type="button" onClick={() => downloadNet('cube')}>Cube net</button><button type="button" onClick={() => downloadNet('pyramid')}>Pyramid net</button>
+              <button type="button" onClick={() => exportMesh('obj')}>Export OBJ mesh</button><button type="button" onClick={() => exportMesh('stl')}>Export STL mesh</button>
               {solids.map((solid) => <button key={solid.id} type="button" title="Remove solid" onClick={() => onSolidsChange(solids.filter((item) => item.id !== solid.id))}>− {solid.shape}</button>)}
-              <button type="button" aria-pressed={sectionEnabled} className={sectionEnabled ? 'active' : ''} onClick={() => setSectionEnabled((enabled) => !enabled)}>Cross-section</button>
-              {sectionEnabled && <label className="slice-height">z={sectionHeight.toFixed(1)}<input aria-label="Cross-section z height" type="range" min="-2" max="4" step="0.1" value={sectionHeight} onChange={(event) => setSectionHeight(Number(event.target.value))} /></label>}
               <label className="field-input">Fₓ<input aria-label="Vector field x component" value={fieldInput.fx} onChange={(event) => setFieldInput((current) => ({ ...current, fx: event.target.value }))} /></label>
               <label className="field-input">Fᵧ<input aria-label="Vector field y component" value={fieldInput.fy} onChange={(event) => setFieldInput((current) => ({ ...current, fy: event.target.value }))} /></label>
               <label className="field-input">F𝓏<input aria-label="Vector field z component" value={fieldInput.fz} onChange={(event) => setFieldInput((current) => ({ ...current, fz: event.target.value }))} /></label>
               <button type="button" onClick={addVectorField}>Add field</button>
               {vectorFields.map((field) => <button key={field.id} type="button" title="Remove vector field" onClick={() => onVectorFieldsChange(vectorFields.filter((item) => item.id !== field.id))}>− Field</button>)}
-            </div>
+            </div></details>
             {fieldError && <div className="graph-error field-error" role="alert">{fieldError}</div>}
           </div>
           <div className="coordinate-readout">Drag to rotate · Scroll to zoom</div>
