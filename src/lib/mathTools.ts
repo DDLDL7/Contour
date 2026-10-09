@@ -1,3 +1,4 @@
+import { findZeroes } from './analysis'
 import { derivative, eigs, evaluate, format, matrix, parse, simplify, type MathNode } from 'mathjs'
 import { compileScalarDefinition, normalizeMathSource } from './math'
 
@@ -185,36 +186,9 @@ function solveNumeric(source: string, options: ToolOptions, definitions: Readonl
   const expression = sides.length === 2 ? `(${sides[0]})-(${sides[1]})` : sides[0]
   const compiled = compileScalarDefinition(expression, ['x', ...Object.keys(definitions)])
   const evaluateAt = (x: number) => compiled.evaluate({ ...definitions, a: options.a, x })
-  const samples = 2400
-  const step = (upper - lower) / samples
-  const roots: number[] = []
-  let previousX = lower
-  let previousY = evaluateAt(previousX)
-  for (let index = 1; index <= samples; index += 1) {
-    const x = lower + index * step
-    const y = evaluateAt(x)
-    if (Number.isFinite(previousY) && Math.abs(previousY) < 1e-9) roots.push(previousX)
-    if (Number.isFinite(previousY) && Number.isFinite(y) && previousY * y < 0) {
-      let left = previousX; let right = x; let leftValue = previousY
-      for (let iteration = 0; iteration < 60; iteration += 1) {
-        const middle = (left + right) / 2
-        const middleValue = evaluateAt(middle)
-        if (!Number.isFinite(middleValue)) break
-        if (Math.abs(middleValue) < 1e-12) { left = middle; right = middle; break }
-        if (leftValue * middleValue <= 0) right = middle
-        else { left = middle; leftValue = middleValue }
-      }
-      const root = (left + right) / 2
-      const residual = evaluateAt(root)
-      const tolerance = 1e-7 * Math.max(1, Math.min(Math.abs(previousY), Math.abs(y)))
-      // A jump across a pole also changes sign; it is not a root.
-      if (Number.isFinite(residual) && Math.abs(residual) <= tolerance) roots.push(root)
-    }
-    previousX = x; previousY = y
-  }
-  if (Number.isFinite(previousY) && Math.abs(previousY) < 1e-9) roots.push(upper)
-  const unique = roots.sort((a, b) => a - b).filter((root, index, list) => index === 0 || Math.abs(root - list[index - 1]) > step * 2)
-  return { title: 'Numerical real roots', value: unique.length ? unique.map((root, index) => `x${index + 1} ≈ ${numberText(root)}`).join('\n') : 'No sign-changing real roots found in this interval.', note: `Scanned ${samples} intervals from ${numberText(lower)} to ${numberText(upper)} and refined sign changes by bisection. This can miss even-multiplicity roots and does not prove that no other roots exist.` }
+  const roots = findZeroes(evaluateAt, lower, upper)
+  return { title: 'Numerical real roots', value: roots.length ? roots.map((root,index)=>`x${index+1} ≈ ${numberText(root)}`).join('\n') : 'No isolated real roots detected in this interval.', note: 'Approximate search over 900 intervals, with sign-change bisection and refinement of even-root valleys. Returns at most 64 roots; closely spaced roots and small features can be missed. This is not proof that all roots were found.' }
+
 }
 
 interface ExpansionTerm { sign: 1 | -1; expression: string }

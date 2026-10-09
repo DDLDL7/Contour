@@ -1,4 +1,4 @@
-const CACHE = 'contour-static-v5'
+const CACHE = 'contour-static-v6'
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -11,6 +11,21 @@ self.addEventListener('install', (event) => {
       .map((match) => new URL(match[1], indexUrl).toString())
       .filter((url) => new URL(url).origin === self.location.origin)
     await cache.addAll(assets)
+    const bundled = await (await fetch(new URL('offline-assets.json', indexUrl))).json()
+    await cache.addAll(bundled.map(file => new URL(file, indexUrl).toString()))
+    const runtime = new URL('math-runtime/', indexUrl)
+    const manifestResponse = await fetch(new URL('manifest.json', runtime))
+    const manifest = await manifestResponse.json()
+    for (const item of manifest) {
+      const url = new URL(item.file, runtime)
+      const asset = await fetch(url)
+      if (!asset.ok) throw new Error(`Offline mathematical asset missing: ${item.file}`)
+      const bytes = await asset.clone().arrayBuffer()
+      const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(byte => byte.toString(16).padStart(2, '0')).join('')
+      if (bytes.byteLength !== item.bytes || digest !== item.sha256) throw new Error(`Offline mathematical asset failed verification: ${item.file}`)
+      await cache.put(url, asset)
+    }
+    await cache.put(new URL('manifest.json', runtime), new Response(JSON.stringify(manifest)))
 
     const stylesheets = assets.filter((url) => new URL(url).pathname.endsWith('.css'))
     for (const stylesheet of stylesheets) {
@@ -20,6 +35,7 @@ self.addEventListener('install', (event) => {
         .filter((url) => new URL(url).origin === self.location.origin)
       await cache.addAll(fontAssets)
     }
+    await cache.put(new URL('offline-ready.json', indexUrl), new Response('{"ready":true}'))
   })())
   self.skipWaiting()
 })
@@ -27,8 +43,17 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
+      .then(async () => { for (const client of await self.clients.matchAll()) client.postMessage({ type: 'math-offline-ready' }) }),
   )
+})
+
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'offline-status') return
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE)
+    if (await cache.match(new URL('offline-ready.json', self.location.href))) event.source?.postMessage({ type: 'math-offline-ready' })
+  })())
 })
 
 self.addEventListener('fetch', (event) => {

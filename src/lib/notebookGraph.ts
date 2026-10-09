@@ -1,14 +1,19 @@
 import { evaluatePlanarPoint, type GraphExpression } from './math'
 import { areNotebookGraphBounds, type NotebookGraphBounds } from './notebook'
+import { contourSegments, sampleScalarGrid } from './contours'
 
 /** Bounded preview sampling. Off-screen samples break paths rather than being clamped. */
 export function notebookGraphPaths(graph: GraphExpression, bounds: NotebookGraphBounds, parameterA: number): string[] {
   if (!areNotebookGraphBounds(bounds)) throw new Error('Enter increasing, finite graph bounds between −1,000,000 and 1,000,000.')
-  if (!['curve', 'vertical', 'polar', 'parametric'].includes(graph.kind)) {
-    throw new Error('Notebook previews support y=f(x), vertical lines, polar curves and parametric curves. Use the 2D or 3D workspace for other expressions.')
+  if (!['curve', 'vertical', 'polar', 'parametric', 'implicit', 'inequality'].includes(graph.kind)) {
+    throw new Error('Use the 3D preview or workspace for surface expressions.')
   }
   const sx = (x: number) => (x - bounds.minX) / (bounds.maxX - bounds.minX) * 640
   const sy = (y: number) => (bounds.maxY - y) / (bounds.maxY - bounds.minY) * 280
+  if (graph.kind === 'implicit' || graph.kind === 'inequality') {
+    const grid=sampleScalarGrid((x,y)=>graph.evaluate(x,y,parameterA),640,280,pixel=>bounds.minX+pixel/640*(bounds.maxX-bounds.minX),pixel=>bounds.maxY-pixel/280*(bounds.maxY-bounds.minY))
+    return contourSegments(grid).map(([x1,y1,x2,y2])=>`M${x1},${y1}L${x2},${y2}`)
+  }
   if (graph.kind === 'vertical') {
     const x = graph.evaluate(0, 0, parameterA)
     return Number.isFinite(x) && x >= bounds.minX && x <= bounds.maxX ? [`M${sx(x)},0L${sx(x)},280`] : []
@@ -40,4 +45,16 @@ export function notebookGraphPaths(graph: GraphExpression, bounds: NotebookGraph
   }
   if (path) paths.push(path)
   return paths
+}
+
+export function notebookInequalityRegion(graph: GraphExpression, bounds: NotebookGraphBounds, parameterA: number): string {
+  if (graph.kind!=='inequality') return ''
+  if (!areNotebookGraphBounds(bounds)) throw new Error('Invalid graph bounds.')
+  let path=''
+  for(let row=0;row<28;row++) for(let column=0;column<64;column++) {
+    const value=graph.evaluate(bounds.minX+(column+.5)/64*(bounds.maxX-bounds.minX),bounds.maxY-(row+.5)/28*(bounds.maxY-bounds.minY),parameterA)
+    const inside=Number.isFinite(value) && (graph.relation==='<' || graph.relation==='<=' ? value<0 : value>0)
+    if (inside) path+=`M${column*10},${row*10}h10v10h-10Z`
+  }
+  return path
 }

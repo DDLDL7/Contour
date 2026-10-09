@@ -2,7 +2,7 @@ import { compileScalarDefinition } from './math'
 import { isWelchSettings, type InferenceMode, type WelchSettings } from './inference'
 
 export interface SpreadsheetSheet { id: string; name: string; cells: Record<string, string> }
-export interface SpreadsheetData { cells: Record<string, string>; sheets?: SpreadsheetSheet[]; activeSheetId?: string; inferenceMode?: InferenceMode; welch?: WelchSettings }
+export interface SpreadsheetData { cells: Record<string, string>; sheets?: SpreadsheetSheet[]; activeSheetId?: string; inferenceMode?: InferenceMode; welch?: WelchSettings; regressionKind?: RegressionKind; polynomialDegree?: number }
 export interface SpreadsheetValue { raw: string; value: number | null; error?: string }
 
 export const spreadsheetColumns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -37,6 +37,8 @@ export function isSpreadsheetData(value: unknown): value is SpreadsheetData {
   if (!value || typeof value !== 'object' || !('cells' in value) || !value.cells || typeof value.cells !== 'object') return false
   const validCells = (cells: unknown) => Boolean(cells && typeof cells === 'object' && Object.entries(cells).every(([address, cell]) => /^[A-H](?:[1-9]|1[0-8])$/.test(address) && typeof cell === 'string' && cell.length <= 500))
   const data = value as Partial<SpreadsheetData>
+  if (data.regressionKind !== undefined && !['linear','exponential','quadratic','polynomial'].includes(data.regressionKind)) return false
+  if (data.polynomialDegree !== undefined && (!Number.isInteger(data.polynomialDegree) || data.polynomialDegree<2 || data.polynomialDegree>8)) return false
   if (data.welch !== undefined && !isWelchSettings(data.welch)) return false
   if (data.inferenceMode !== undefined && !['one-sample', 'welch', 'anova', 'posthoc', 'chi-square', 'independence'].includes(data.inferenceMode)) return false
   if (!validCells(data.cells)) return false
@@ -106,43 +108,51 @@ export function fitLinear(points: { x: number; y: number }[]) {
   return fit ? { slope: fit.coefficients[1], intercept: fit.coefficients[0], rSquared: fit.rSquared } : null
 }
 
-export type RegressionKind = 'linear' | 'exponential' | 'quadratic'
-export interface RegressionFit { coefficients: number[]; rSquared: number; predict: (x: number) => number }
+export type RegressionKind = 'linear' | 'exponential' | 'quadratic' | 'polynomial'
+export interface RegressionFit { coefficients: number[]; normalizedCoefficients: number[]; xCenter: number; xScale: number; rSquared: number; predict: (x: number) => number }
 
-function solveSystem(matrix: number[][], values: number[]): number[] | null {
-  const size = values.length
-  const augmented = matrix.map((row, index) => [...row, values[index]])
-  for (let column = 0; column < size; column += 1) {
-    let pivot = column
-    for (let row = column + 1; row < size; row += 1) if (Math.abs(augmented[row][column]) > Math.abs(augmented[pivot][column])) pivot = row
-    if (Math.abs(augmented[pivot][column]) < 1e-12) return null
-    ;[augmented[column], augmented[pivot]] = [augmented[pivot], augmented[column]]
-    const divisor = augmented[column][column]
-    for (let entry = column; entry <= size; entry += 1) augmented[column][entry] /= divisor
-    for (let row = 0; row < size; row += 1) {
-      if (row === column) continue
-      const factor = augmented[row][column]
-      for (let entry = column; entry <= size; entry += 1) augmented[row][entry] -= factor * augmented[column][entry]
-    }
-  }
-  return augmented.map((row) => row[size])
-}
-
-export function fitRegression(points: { x: number; y: number }[], kind: RegressionKind): RegressionFit | null {
-  const degree = kind === 'quadratic' ? 2 : 1
+export function fitRegression(points: { x: number; y: number }[], kind: RegressionKind, polynomialDegree = 3): RegressionFit | null {
+  const degree = kind === 'polynomial' ? polynomialDegree : kind === 'quadratic' ? 2 : 1
+  if (!Number.isInteger(degree) || degree < 1 || degree > 8 || points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y))) return null
   if (points.length < degree + 1 || (kind === 'exponential' && points.some((point) => point.y <= 0))) return null
   const transformed = kind === 'exponential' ? points.map((point) => ({ x: point.x, y: Math.log(point.y) })) : points
-  const matrix = Array.from({ length: degree + 1 }, (_, row) => Array.from({ length: degree + 1 }, (_, column) => transformed.reduce((sum, point) => sum + point.x ** (row + column), 0)))
-  const rhs = Array.from({ length: degree + 1 }, (_, power) => transformed.reduce((sum, point) => sum + point.y * point.x ** power, 0))
-  const solved = solveSystem(matrix, rhs)
-  if (!solved) return null
+  const min = Math.min(...points.map(point => point.x)); const max = Math.max(...points.map(point => point.x))
+  const center = min + (max - min) / 2; const scale = (max - min) / 2
+  if (!Number.isFinite(scale) || scale <= 0) return null
+  // Centered/scaled Vandermonde with twice-orthogonalized QR avoids squaring
+  // the condition number as normal equations would.
+  const q: number[][] = []; const r = Array.from({ length: degree + 1 }, () => Array(degree + 1).fill(0) as number[])
+  for (let column = 0; column <= degree; column++) {
+    const v = transformed.map(point => ((point.x - center) / scale) ** column)
+    for (let pass = 0; pass < 2; pass++) for (let prior = 0; prior < column; prior++) {
+      const projection = v.reduce((sum, value, index) => sum + value * q[prior][index], 0)
+      r[prior][column] += projection
+      for (let index = 0; index < v.length; index++) v[index] -= projection * q[prior][index]
+    }
+    const norm = Math.hypot(...v)
+    if (norm < 1e-10) return null
+    r[column][column] = norm; q.push(v.map(value => value / norm))
+  }
+  const normalized = q.map(column => column.reduce((sum, value, index) => sum + value * transformed[index].y, 0))
+  for (let row = degree; row >= 0; row--) {
+    for (let column = row + 1; column <= degree; column++) normalized[row] -= r[row][column] * normalized[column]
+    normalized[row] /= r[row][row]
+  }
+  const solved = Array(degree + 1).fill(0) as number[]
+  for (let power = 0; power <= degree; power++) {
+    let choose = 1
+    for (let index = 0; index <= power; index++) {
+      solved[index] += normalized[power] * choose * (-center) ** (power - index) / scale ** power
+      choose = choose * (power - index) / (index + 1)
+    }
+  }
   const coefficients = kind === 'exponential' ? [Math.exp(solved[0]), solved[1]] : solved
   const predict = (x: number) => kind === 'exponential'
     ? coefficients[0] * Math.exp(coefficients[1] * x)
-    : coefficients.reduce((sum, coefficient, power) => sum + coefficient * x ** power, 0)
+    : normalized.reduceRight((sum, coefficient) => sum * ((x - center) / scale) + coefficient, 0)
   if (points.some((point) => !Number.isFinite(predict(point.x)))) return null
   const mean = points.reduce((sum, point) => sum + point.y, 0) / points.length
   const total = points.reduce((sum, point) => sum + (point.y - mean) ** 2, 0)
   const residual = points.reduce((sum, point) => sum + (point.y - predict(point.x)) ** 2, 0)
-  return { coefficients, rSquared: total === 0 ? (residual < 1e-12 ? 1 : 0) : 1 - residual / total, predict }
+  return { coefficients, normalizedCoefficients:normalized, xCenter:center, xScale:scale, rSquared: total === 0 ? (residual < 1e-12 ? 1 : 0) : 1 - residual / total, predict }
 }

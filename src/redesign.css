@@ -223,6 +223,16 @@
 .app-shell[data-theme] :is(.math-tool-run,.probability-fields button) { border-radius: 3px; background: var(--blue); color: #142a5f; }
 .app-shell[data-theme] :is(.math-tool-result,.notebook-answer,.probability-result > div,.inference-result,.regression-summary) { border-color: var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); }
 .app-shell[data-theme] :is(.math-result-field,.math-tool-result .math-result-text,.probability-result b,.inference-result strong,.regression-summary strong) { color: var(--green); }
+.math-engine-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+.app-shell .math-engine-picker button { border: 1px solid var(--line); background: var(--bench); color: var(--ink); padding: 10px 14px; border-radius: 3px; font: inherit; cursor: pointer; }
+.app-shell .math-engine-picker button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.app-shell .math-tool-options select, .app-shell .regression-picker input, .app-shell .slice-hud select { width: 100%; min-height: 38px; padding: 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); font: inherit; }
+.app-shell .math-tool-result .math-result-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.notebook-answer-cell { display: grid; gap: 12px; }
+.notebook-3d-preview { height: 300px; position: relative; overflow: hidden; border: 1px solid var(--line); }
+.notebook-answer-cell label { display: grid; gap: 6px; }
+.point-coordinate-editor { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-shell .notebook-answer-cell input { width: 100%; padding: 10px; border: 1px solid var(--line); background: var(--bench); color: var(--ink); border-radius: 3px; }
 .app-shell[data-theme] :is(.notebook-toolbar button,.notebook-empty button,.notebook-parameter-form button) { border-color: var(--line); border-radius: 3px; background: var(--raised); color: var(--blue); }
 .app-shell[data-theme] :is(.notebook-toolbar button,.notebook-empty button,.notebook-parameter-form button):hover { background: var(--bench); }
 .app-shell[data-theme] .notebook-preview { background: var(--bench); border-left-color: var(--blue); color: var(--ink); }
@@ -309,3 +319,6 @@
   .app-shell .geometry-toolbar { max-width: calc(100% - 75px); }
   .app-shell .analysis-panel { max-height: 42%; }
 }
+
+.app-shell[data-theme] .math-tool-result > span { color: var(--green); }
+.app-shell[data-theme] .math-tool-result > p:not(.math-result-text) { color: var(--muted); }

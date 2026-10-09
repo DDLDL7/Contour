@@ -47,7 +47,8 @@ describe('linked notebook editing', () => {
     expect(host.textContent).toContain('linked expression was removed')
     expect(host.querySelector('svg')).toBeNull()
     render(<NotebookGraphCell {...props} expressions={[{ ...props.expressions[0], text: 'z=x+y' }]} />)
-    expect(host.querySelector('[role="status"]')?.textContent).toContain('workspace')
+    expect(host.textContent).toContain('Show 3D preview')
+    expect(host.querySelector('canvas')).toBeNull()
     expect(host.querySelector('svg')).toBeNull()
   })
 

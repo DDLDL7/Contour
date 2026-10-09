@@ -1,3 +1,4 @@
+import { meshPlaneSection } from '../lib/sections'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
@@ -5,10 +6,10 @@ import { OBJExporter } from 'three/addons/exporters/OBJExporter.js'
 import { STLExporter } from 'three/addons/exporters/STLExporter.js'
 import { evaluateSpatialPoint, type PlottableGraph } from '../lib/math'
 import { sampleImplicitSurface, sampleParametricSurface, type MeshSamples } from '../lib/meshing'
-import { printableNetSvg, type SolidObject, type SolidShape } from '../lib/solids'
+import { printableNetSvg, type SolidObject, type NetShape, type SolidShape } from '../lib/solids'
 import type { VectorFieldObject } from '../lib/solids'
 import { compileScalarDefinition } from '../lib/math'
-import { contourSegments, sampleScalarGrid } from '../lib/contours'
+import type { TriangleMesh } from '../lib/intersections3d'
 
 interface Props {
   graphs: PlottableGraph[]
@@ -136,11 +137,14 @@ function makeSampledSurface(samples: MeshSamples, color: string, wireframe: bool
   return new THREE.Mesh(geometry, material)
 }
 
-export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSolidsChange, vectorFields, onVectorFieldsChange, definitions }: Props) {
+export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSolidsChange, vectorFields, onVectorFieldsChange, definitions, preview = false }: Props & { preview?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<SceneState | null>(null)
   const [wireframe, setWireframe] = useState(false)
   const [sectionEnabled, setSectionEnabled] = useState(false)
+  const [intersectionsEnabled, setIntersectionsEnabled] = useState(true)
+  const [intersectionStatus, setIntersectionStatus] = useState('')
+  const [sectionAxis, setSectionAxis] = useState<'x' | 'y' | 'z'>('z')
   const [sectionHeight, setSectionHeight] = useState(1)
   const [projection, setProjection] = useState<'perspective' | 'orthographic'>('perspective')
   const [fieldInput, setFieldInput] = useState({ fx: '-y', fy: 'x', fz: '0' })
@@ -240,39 +244,41 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
       mesh.geometry.dispose()
       ;(mesh.material as THREE.Material).dispose()
     }
+    const addSection = (mesh: THREE.Mesh) => {
+      if (!sectionEnabled) return
+      mesh.updateMatrixWorld(true)
+      const position = mesh.geometry.getAttribute('position')
+      const vertices: number[] = []
+      for (let i = 0; i < position.count; i++) {
+        const p = mesh.localToWorld(new THREE.Vector3(position.getX(i), position.getY(i), position.getZ(i)))
+        vertices.push(p.x, p.y, p.z)
+      }
+      const index = mesh.geometry.getIndex()
+      const sections = meshPlaneSection(vertices, index?.array ?? null, sectionAxis === 'x' ? 0 : sectionAxis === 'y' ? 2 : 1, sectionHeight)
+      if (sections.length) {
+        const geometry = new THREE.BufferGeometry()
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(sections, 3))
+        state.surfaces.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: '#e05252' })))
+      }
+    }
+    const intersectionMeshes: THREE.Mesh[] = []
+    let intersectionWorker: Worker | null = null
+    let intersectionTimer: ReturnType<typeof setTimeout> | undefined
     const advanced = new Map<string, PlottableGraph>()
     for (const graph of graphs) {
       if (!graph.visible) continue
       if (graph.graph.kind === 'surface') {
         const mesh = makeSurface(graph, parameterA, wireframe)
-        if (mesh) state.surfaces.add(mesh)
+        if (mesh) { state.surfaces.add(mesh); addSection(mesh); intersectionMeshes.push(mesh) }
       } else if (graph.graph.kind === 'parametricSurface' || graph.graph.kind === 'implicitSurface') {
         advanced.set(graph.id, graph)
       } else if (graph.graph.kind === 'spaceCurve') {
         state.surfaces.add(...makeSpaceCurve(graph, parameterA))
       }
     }
-    const explicitSurfaces = graphs.filter((item) => item.visible && item.graph.kind === 'surface')
-    for (let first = 0; first < explicitSurfaces.length; first += 1) for (let second = first + 1; second < explicitSurfaces.length; second += 1) {
-      const a = explicitSurfaces[first]; const b = explicitSurfaces[second]
-      const width = 1200; const height = 1000
-      const grid = sampleScalarGrid((x, y) => a.graph.evaluate(x, y, parameterA) - b.graph.evaluate(x, y, parameterA), width, height, (pixel) => -6 + pixel / 100, (pixel) => 5 - pixel / 100)
-      const positions: number[] = []
-      for (const [x1, y1, x2, y2] of contourSegments(grid)) {
-        const xA = -6 + x1 / 100; const yA = 5 - y1 / 100
-        const xB = -6 + x2 / 100; const yB = 5 - y2 / 100
-        const zA = (a.graph.evaluate(xA, yA, parameterA) + b.graph.evaluate(xA, yA, parameterA)) / 2
-        const zB = (a.graph.evaluate(xB, yB, parameterA) + b.graph.evaluate(xB, yB, parameterA)) / 2
-        if ([xA, yA, zA, xB, yB, zB].every(Number.isFinite) && Math.max(Math.abs(zA), Math.abs(zB)) < 30) positions.push(xA, zA, yA, xB, zB, yB)
-      }
-      if (positions.length) {
-        const geometry = new THREE.BufferGeometry()
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-        state.surfaces.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: '#dd4d4d', linewidth: 2 })))
-      }
-    }
     const makePrimitive = (item: SolidObject) => {
       const size = item.size
+      if (item.shape === 'tetrahedron') return new THREE.TetrahedronGeometry(size)
       if (item.shape === 'sphere') return new THREE.SphereGeometry(size, 32, 20)
       if (item.shape === 'cube') return new THREE.BoxGeometry(size * 1.6, size * 1.6, size * 1.6)
       if (item.shape === 'cylinder') return new THREE.CylinderGeometry(size, size, size * 2, 32)
@@ -286,37 +292,15 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
       mesh.position.set(item.x, item.z, item.y)
       mesh.updateMatrixWorld(true)
       state.surfaces.add(mesh)
-      if (sectionEnabled) {
-        const position = mesh.geometry.getAttribute('position')
-        const index = mesh.geometry.getIndex()
-        const getVertex = (vertex: number) => mesh.localToWorld(new THREE.Vector3(position.getX(vertex), position.getY(vertex), position.getZ(vertex)))
-        const sections: number[] = []
-        const triangleCount = index ? index.count / 3 : position.count / 3
-        for (let triangle = 0; triangle < triangleCount; triangle += 1) {
-          const vertices = [0, 1, 2].map((corner) => getVertex(index ? index.getX(triangle * 3 + corner) : triangle * 3 + corner))
-          const intersections: THREE.Vector3[] = []
-          for (let edge = 0; edge < 3; edge += 1) {
-            const first = vertices[edge]; const second = vertices[(edge + 1) % 3]
-            const firstDelta = first.y - sectionHeight; const secondDelta = second.y - sectionHeight
-            if (firstDelta * secondDelta > 0 || Math.abs(firstDelta - secondDelta) < 1e-12) continue
-            const fraction = firstDelta / (firstDelta - secondDelta)
-            if (fraction >= 0 && fraction <= 1) intersections.push(first.clone().lerp(second, fraction))
-          }
-          if (intersections.length >= 2) sections.push(intersections[0].x, sectionHeight, intersections[0].z, intersections[1].x, sectionHeight, intersections[1].z)
-        }
-        if (sections.length) {
-          const sectionGeometry = new THREE.BufferGeometry()
-          sectionGeometry.setAttribute('position', new THREE.Float32BufferAttribute(sections, 3))
-          state.surfaces.add(new THREE.LineSegments(sectionGeometry, new THREE.LineBasicMaterial({ color: '#e05252', linewidth: 2 })))
-        }
-      }
+      addSection(mesh)
     })
     if (sectionEnabled) {
       const planeGeometry = new THREE.PlaneGeometry(18, 18)
       const planeMaterial = new THREE.MeshBasicMaterial({ color: '#df7752', side: THREE.DoubleSide, transparent: true, opacity: 0.12, depthWrite: false })
       const plane = new THREE.Mesh(planeGeometry, planeMaterial)
-      plane.rotation.x = -Math.PI / 2
-      plane.position.y = sectionHeight
+      if (sectionAxis === 'z') { plane.rotation.x = -Math.PI / 2; plane.position.y = sectionHeight }
+      else if (sectionAxis === 'x') { plane.rotation.y = Math.PI / 2; plane.position.x = sectionHeight }
+      else plane.position.z = sectionHeight
       plane.renderOrder = 2
       state.surfaces.add(plane)
     }
@@ -353,8 +337,32 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
         ? sampleParametricSurface(graph.graph, parameterA)
         : sampleImplicitSurface(graph.graph, parameterA))
       const mesh = makeSampledSurface(result, graph.color, wireframe)
-      if (mesh) state.surfaces.add(mesh)
+      if (mesh) { state.surfaces.add(mesh); addSection(mesh); intersectionMeshes.push(mesh) }
       state.renderer.render(state.scene, state.camera)
+    }
+    const calculateIntersections = () => {
+      if (!active || !intersectionsEnabled || intersectionMeshes.length < 2) { if (active) setIntersectionStatus(''); return }
+      const meshes: TriangleMesh[] = intersectionMeshes.map(mesh => {
+        const p = mesh.geometry.getAttribute('position')
+        return { positions: Array.from(p.array), indices: mesh.geometry.getIndex() ? Array.from(mesh.geometry.getIndex()!.array) : null }
+      })
+      setIntersectionStatus('Calculating sampled surface intersections…')
+      intersectionWorker = new Worker(new URL('../workers/intersections.worker.ts', import.meta.url), { type: 'module' })
+      intersectionTimer = setTimeout(() => { intersectionWorker?.terminate(); if (active) setIntersectionStatus('Intersection calculation exceeded 30 seconds. Reduce visible surfaces.') }, 30000)
+      intersectionWorker.onmessage = ({ data }) => {
+        clearTimeout(intersectionTimer); intersectionWorker?.terminate()
+        if (!active) return
+        if (data.error) { setIntersectionStatus(data.error); return }
+        if (data.segments.length) {
+          const geometry = new THREE.BufferGeometry()
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(data.segments, 3))
+          state.surfaces.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: '#dd4d4d' })))
+          state.renderer.render(state.scene, state.camera)
+        }
+        setIntersectionStatus('Intersections approximate sampled surfaces. Tangencies and coincident faces are omitted.')
+      }
+      intersectionWorker.onerror = () => { clearTimeout(intersectionTimer); intersectionWorker?.terminate(); if (active) setIntersectionStatus('Could not calculate surface intersections.') }
+      intersectionWorker.postMessage({ meshes })
     }
     let worker: Worker | null = null
     const completed = new Set<string>()
@@ -366,12 +374,14 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
           if (graph && !completed.has(graph.id)) {
             addAdvanced(graph, event.data.error ? undefined : event.data.samples)
             completed.add(graph.id)
+            if (completed.size === advanced.size) calculateIntersections()
           }
         }
         worker.onerror = () => {
           worker?.terminate()
           worker = null
           for (const graph of advanced.values()) if (!completed.has(graph.id)) addAdvanced(graph)
+          calculateIntersections()
         }
         for (const graph of advanced.values()) {
           worker.postMessage({
@@ -384,13 +394,17 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
       } catch {
         worker?.terminate()
         for (const graph of advanced.values()) if (!completed.has(graph.id)) addAdvanced(graph)
+        calculateIntersections()
       }
     }
+    if (advanced.size === 0) calculateIntersections()
     return () => {
+      clearTimeout(intersectionTimer)
+      intersectionWorker?.terminate()
       active = false
       worker?.terminate()
     }
-  }, [graphs, parameterA, wireframe, solids, sectionEnabled, sectionHeight, vectorFields, definitions])
+  }, [graphs, parameterA, wireframe, solids, sectionEnabled, sectionHeight, sectionAxis, intersectionsEnabled, vectorFields, definitions])
 
   function addSolid(shape: SolidShape) {
     const index = solids.length
@@ -398,7 +412,7 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     onSolidsChange([...solids, { id: crypto.randomUUID(), shape, x: ((index % 3) - 1) * 3, y: Math.floor(index / 3) * 3, z: 1, size: 1, color: colors[index % colors.length], visible: true }])
   }
 
-  function downloadNet(shape: 'cube' | 'pyramid') {
+  function downloadNet(shape: NetShape) {
     const blob = new Blob([printableNetSvg(shape)], { type: 'image/svg+xml' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -463,18 +477,19 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
   return (
     <div className="graph-stage" ref={containerRef}>
       {error ? <div className="graph-error">{error}</div> : <canvas ref={canvasRef} className="graph-canvas" aria-label="Interactive three-dimensional graph. Drag to rotate and scroll to zoom." role="img" />}
-      {!error && (
+      {!error && !preview && (
         <>
           <div className="graph-controls graph-controls-3d" aria-label="3D graph controls">
             <button type="button" onClick={() => moveCamera('iso')} aria-label="Reset 3D view" className="reset-view">⌖</button>
             <div className="camera-presets" role="group" aria-label="Camera views">{(['iso', 'top', 'front', 'right'] as const).map((view) => <button key={view} type="button" onClick={() => moveCamera(view)} aria-label={`${view} view`}>{view === 'front' ? 'FRT' : view === 'right' ? 'RGT' : view.toUpperCase()}</button>)}</div>
             <button type="button" onClick={toggleProjection} aria-label={`Switch to ${projection === 'perspective' ? 'orthographic' : 'perspective'} projection`} title={`Current projection: ${projection}`}>{projection === 'perspective' ? 'PERSP' : 'ORTHO'}</button>
             <button type="button" onClick={() => setWireframe((current) => !current)} aria-label={wireframe ? 'Show solid surface' : 'Show wireframe'} className="wireframe-toggle">{wireframe ? 'Solid' : 'Mesh'}</button>
+            <button type="button" aria-pressed={intersectionsEnabled} onClick={() => setIntersectionsEnabled(value => !value)}>Intersections</button>
             <button type="button" aria-pressed={sectionEnabled} className={sectionEnabled ? 'active' : ''} onClick={() => setSectionEnabled((enabled) => !enabled)} title="Toggle cross-section">Slice</button>
-            {sectionEnabled && <label className="slice-hud">Slice z = {sectionHeight.toFixed(1)}<input aria-label="Cross-section z height" type="range" min="-2" max="4" step="0.1" value={sectionHeight} onChange={(event) => setSectionHeight(Number(event.target.value))} /></label>}
+            {sectionEnabled && <label className="slice-hud">Slice <select aria-label="Cross-section axis" value={sectionAxis} onChange={event => setSectionAxis(event.target.value as typeof sectionAxis)}><option>x</option><option>y</option><option>z</option></select> = <input aria-label="Cross-section coordinate" type="number" step="0.1" value={sectionHeight} onChange={event => setSectionHeight(Number(event.target.value))} /></label>}
             <details className="solid-menu"><summary>Objects</summary><div className="solid-controls" aria-label="3D solid constructions">
-              {(['sphere', 'cube', 'cylinder', 'cone', 'pyramid'] as SolidShape[]).map((shape) => <button key={shape} type="button" onClick={() => addSolid(shape)}>+ {shape[0].toUpperCase() + shape.slice(1)}</button>)}
-              <button type="button" onClick={() => downloadNet('cube')}>Cube net</button><button type="button" onClick={() => downloadNet('pyramid')}>Pyramid net</button>
+              {(['sphere', 'cube', 'cylinder', 'cone', 'pyramid', 'tetrahedron'] as SolidShape[]).map((shape) => <button key={shape} type="button" onClick={() => addSolid(shape)}>+ {shape[0].toUpperCase() + shape.slice(1)}</button>)}
+              {(['cube', 'pyramid', 'tetrahedron', 'cylinder', 'cone'] as NetShape[]).map(shape => <button key={shape} type="button" onClick={() => downloadNet(shape)}>{shape} net</button>)}
               <button type="button" onClick={() => exportMesh('obj')}>Export OBJ mesh</button><button type="button" onClick={() => exportMesh('stl')}>Export STL mesh</button>
               {solids.map((solid) => <button key={solid.id} type="button" title="Remove solid" onClick={() => onSolidsChange(solids.filter((item) => item.id !== solid.id))}>− {solid.shape}</button>)}
               <label className="field-input">Fₓ<input aria-label="Vector field x component" value={fieldInput.fx} onChange={(event) => setFieldInput((current) => ({ ...current, fx: event.target.value }))} /></label>
@@ -483,7 +498,8 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
               <button type="button" onClick={addVectorField}>Add field</button>
               {vectorFields.map((field) => <button key={field.id} type="button" title="Remove vector field" onClick={() => onVectorFieldsChange(vectorFields.filter((item) => item.id !== field.id))}>− Field</button>)}
             </div></details>
-            {fieldError && <div className="graph-error field-error" role="alert">{fieldError}</div>}
+            {intersectionStatus && <p className="field-error" role="status">{intersectionStatus}</p>}
+      {fieldError && <div className="graph-error field-error" role="alert">{fieldError}</div>}
           </div>
           <div className="coordinate-readout">Drag to rotate · Scroll to zoom</div>
           <div className="axis-key"><span className="axis-x">x</span><span className="axis-y">y</span><span className="axis-z">z</span></div>

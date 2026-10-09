@@ -30,7 +30,7 @@ describe('maths tools', () => {
   it('finds approximate roots of non-polynomial equations on a selected interval', () => {
     const result = runMathTool('solve-numeric', 'sin(x) = 0', { ...options, start: 3, end: 4 })
     expect(Number(result.value.split('≈ ')[1])).toBeCloseTo(Math.PI, 8)
-    expect(result.note).toContain('can miss even-multiplicity roots')
+    expect(result.note).toContain('refinement of even-root valleys')
   })
 
   it('handles singular matrices, summary statistics, regression, and an ODE', () => {
@@ -77,7 +77,7 @@ describe('maths tools', () => {
   })
 
   it('does not report a pole as a numerical root', () => {
-    expect(runMathTool('solve-numeric', 'tan(x) = 0', { ...options, start: 1.4, end: 1.8 }).value).toContain('No sign-changing real roots')
+    expect(runMathTool('solve-numeric', 'tan(x) = 0', { ...options, start: 1.4, end: 1.8 }).value).toContain('No isolated real roots')
   })
 
   it('expands, factors, and substitutes supported symbolic expressions', () => {

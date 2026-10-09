@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { PointCoordinates } from './PointCoordinates'
 import { Circle, CircleDot, Crosshair, DraftingCompass, Ellipse, Link, Move, MousePointer2, Orbit, Pentagon, Ruler, Triangle, Waves } from 'lucide-react'
 import { estimateCurveDiagnostics, estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from '../lib/analysis'
 import { contourSegments, sampleScalarGrid, type ScalarGrid } from '../lib/contours'
 import { evaluatePlanarPoint, formatNumber, type PlottableGraph } from '../lib/math'
-import { fitConic, intersectGeometryPaths, resolveGeometryPoints as resolveGeometryPointObjects, sampleLineEnvelope, type GeometryCircle, type GeometryConic, type GeometryEllipse, type GeometryEnvelope, type GeometryLocus, type GeometryObject, type GeometryPath, type GeometryPoint, type GeometryTool, type GeometryTransform, type TransformOperation } from '../lib/geometry'
+import { fitConic, sampleCurveLocus, removeGeometryObjects, projectPointToPath, intersectGeometryPaths, resolveGeometryPoints as resolveGeometryPointObjects, sampleLineEnvelope, type GeometryCircle, type GeometryConic, type GeometryEllipse, type GeometryEnvelope, type GeometryLocus, type GeometryObject, type GeometryPath, type GeometryPoint, type GeometryTool, type GeometryTransform, type TransformOperation } from '../lib/geometry'
 
 interface Viewport {
   centerX: number
@@ -125,8 +126,12 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
   const [selectedGeometryId, setSelectedGeometryId] = useState<string | null>(null)
   const [linkedXCell, setLinkedXCell] = useState('A2')
   const [linkedYCell, setLinkedYCell] = useState('B2')
+  const [locusInput,setLocusInput] = useState({x:'t',y:'t^2',start:'-3',end:'3'})
+  const [constructionError,setConstructionError] = useState('')
   const [envelopeInput, setEnvelopeInput] = useState({ slope: 't', intercept: '-t^2/2', start: '-4', end: '4' })
   const [transformOperation, setTransformOperation] = useState<TransformOperation>('translate')
+  const [reflectionLineId, setReflectionLineId] = useState('')
+  const [matrixInput,setMatrixInput]=useState('1, 0; 0, 1')
   const [transformValues, setTransformValues] = useState({ dx: '1', dy: '0', centerX: '0', centerY: '0', angleDegrees: '90', scale: '2', radius: '2' })
 
   const visibleGeometry = useMemo(() => {
@@ -138,6 +143,12 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
       seen.add(id)
       if (point.id === previewPoint?.id) return { ...point, x: previewPoint.x, y: previewPoint.y }
       if (point.xCell && point.yCell) return { ...point, x: linkedValues[point.xCell] ?? Number.NaN, y: linkedValues[point.yCell] ?? Number.NaN }
+      if (point.onPath) {
+        const path = paths.get(point.onPath.pathId)
+        const start = path && resolve(path.startId, new Set(seen)); const end = path && resolve(path.endId, new Set(seen))
+        if (!start || !end) return { ...point, x: Number.NaN, y: Number.NaN }
+        return { ...point, x: start.x + point.onPath.t*(end.x-start.x), y: start.y + point.onPath.t*(end.y-start.y) }
+      }
       if (point.intersectionOf) {
         const [firstPath, secondPath] = point.intersectionOf.map((pathId) => paths.get(pathId))
         if (!firstPath || !secondPath) return { ...point, x: Number.NaN, y: Number.NaN }
@@ -297,6 +308,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
       ctx.lineJoin = 'round'
       ctx.beginPath()
 
+
       if (item.graph.kind === 'implicit' || item.graph.kind === 'inequality') {
         const grid = scalarGrids.get(item.id)
         if (grid) {
@@ -359,43 +371,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
     }
 
     const geometryPoints = new Map(visibleGeometry.filter((item): item is GeometryPoint => item.kind === 'point').map((point) => [point.id, point]))
-    const resolveGeometryPoints = (id: string, seen = new Set<string>()): GeometryPoint[] => {
-      if (seen.has(id)) return []
-      seen.add(id)
-      const object = visibleGeometry.find((item) => item.id === id)
-      if (!object || !object.visible) return []
-      if (object.kind === 'point') return [object]
-      if (object.kind === 'polygon') return object.pointIds.map((pointId) => geometryPoints.get(pointId)).filter((point): point is GeometryPoint => Boolean(point?.visible))
-      if (object.kind === 'line' || object.kind === 'segment' || object.kind === 'ray' || object.kind === 'vector') {
-        const points = [geometryPoints.get(object.startId), geometryPoints.get(object.endId)]
-        return points.filter((point): point is GeometryPoint => Boolean(point?.visible))
-      }
-      if (object.kind !== 'transform') return []
-      const sourcePoints = resolveGeometryPoints(object.sourceId, seen)
-      return sourcePoints.map((point) => {
-        let x = point.x
-        let y = point.y
-        if (object.operation === 'translate') { x += object.dx; y += object.dy }
-        if (object.operation === 'reflect-x') y = -y
-        if (object.operation === 'reflect-y') x = -x
-        if (object.operation === 'reflect-origin') { x = -x; y = -y }
-        if (object.operation === 'rotate') {
-          const angle = object.angleDegrees * Math.PI / 180
-          const dx = x - object.centerX; const dy = y - object.centerY
-          x = object.centerX + dx * Math.cos(angle) - dy * Math.sin(angle)
-          y = object.centerY + dx * Math.sin(angle) + dy * Math.cos(angle)
-        }
-        if (object.operation === 'dilate') { x = object.centerX + (x - object.centerX) * object.scale; y = object.centerY + (y - object.centerY) * object.scale }
-        if (object.operation === 'invert') {
-          const dx = x - object.centerX; const dy = y - object.centerY
-          const distance2 = dx * dx + dy * dy
-          if (distance2 < 1e-12) return { ...point, x: Number.NaN, y: Number.NaN }
-          x = object.centerX + object.radius * object.radius * dx / distance2
-          y = object.centerY + object.radius * object.radius * dy / distance2
-        }
-        return { ...point, id: `${object.id}:${point.id}`, label: `${point.label}′`, x, y, color: object.color }
-      })
-    }
+    const resolveGeometryPoints = (id: string): GeometryPoint[] => resolveGeometryPointObjects(visibleGeometry, id)
     for (const object of visibleGeometry) {
       if (!object.visible || object.kind === 'point' || object.kind === 'measurement') continue
       ctx.strokeStyle = object.color
@@ -403,6 +379,17 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       ctx.beginPath()
+      if (object.kind === 'tangent') {
+        const graph = graphs.find(item => item.id === object.expressionId && item.visible && item.graph.kind === 'curve')
+        if (!graph) continue
+        const y = graph.graph.evaluate(object.x, 0, parameterA)
+        const slope = estimateSlope(graph.graph, parameterA, object.x)
+        if (!Number.isFinite(y) || !Number.isFinite(slope)) continue
+        const left = viewport.centerX - size.width / (2 * viewport.scale)
+        const right = viewport.centerX + size.width / (2 * viewport.scale)
+        ctx.setLineDash([6, 4]); ctx.moveTo(sx(left), sy(y + slope * (left - object.x))); ctx.lineTo(sx(right), sy(y + slope * (right - object.x))); ctx.stroke(); ctx.setLineDash([])
+        continue
+      }
       if (object.kind === 'circle') {
         const center = geometryPoints.get(object.centerId); const radiusPoint = geometryPoints.get(object.radiusPointId)
         if (!center || !radiusPoint) continue
@@ -438,6 +425,19 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         for (const [x1, y1, x2, y2] of contourSegments(grid)) {
           ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
         }
+        continue
+      }
+      if (object.kind === 'curve-locus') {
+        try {
+          let previous: {x:number;y:number} | null=null
+          for (const point of sampleCurveLocus(object,{...linkedValues,a:parameterA})) {
+            if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {previous=null;continue}
+            if (previous && Math.hypot(sx(point.x)-sx(previous.x),sy(point.y)-sy(previous.y))<80) {
+              ctx.beginPath();ctx.moveTo(sx(previous.x),sy(previous.y));ctx.lineTo(sx(point.x),sy(point.y));ctx.stroke()
+            }
+            previous=point
+          }
+        } catch { /* A linked variable may temporarily be invalid. */ }
         continue
       }
       if (object.kind === 'locus') {
@@ -795,14 +795,19 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
 
   function createTransform() {
     const source = geometry.find((object) => object.id === selectedGeometryId)
-    if (!source || source.kind === 'measurement' || source.kind === 'circle' || source.kind === 'ellipse' || source.kind === 'conic' || source.kind === 'locus' || source.kind === 'envelope') return
+    if (!source || source.kind === 'curve-locus' || source.kind === 'tangent' || source.kind === 'measurement' || source.kind === 'circle' || source.kind === 'ellipse' || source.kind === 'conic' || source.kind === 'locus' || source.kind === 'envelope') return
     const sourceKind = source.kind === 'transform' ? source.sourceKind : source.kind
     const values = Object.fromEntries(Object.entries(transformValues).map(([key, value]) => [key, Number(value)])) as Record<keyof typeof transformValues, number>
     if (Object.values(values).some((value) => !Number.isFinite(value))) return
+    if (transformOperation === 'reflect-line' && !reflectionLineId) return
+    const matrix=matrixInput.split(/[;,]/).map(value=>Number(value.trim()))
+    if (transformOperation==='matrix' && (matrix.length!==4 || matrixInput.split(/[;,]/).some(value=>!value.trim()) || !matrix.every(Number.isFinite))) { setConstructionError('Enter four finite matrix entries: a, b; c, d.'); return }
     const transformed: GeometryTransform = {
       id: crypto.randomUUID(), kind: 'transform', sourceId: source.id, sourceKind, operation: transformOperation,
       dx: values.dx, dy: values.dy, centerX: values.centerX, centerY: values.centerY,
       angleDegrees: values.angleDegrees, scale: values.scale, radius: values.radius,
+      ...(transformOperation === 'reflect-line' ? { reflectionLineId } : {}),
+      ...(transformOperation === 'matrix' ? {matrix:matrix as [number,number,number,number]} : {}),
       color: '#0c9cb5', visible: true,
     }
     onGeometryChange([...geometry, transformed])
@@ -826,11 +831,28 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
   }
 
   function createGeometryPoint(x: number, y: number, labelOffset = 0): GeometryPoint {
-    return { id: crypto.randomUUID(), kind: 'point', x, y, color: '#286fc0', label: nextPointLabel(labelOffset), visible: true }
+    const point: GeometryPoint = { id: crypto.randomUUID(), kind: 'point', x, y, color: '#286fc0', label: nextPointLabel(labelOffset), visible: true }
+    if (geometryTool === 'linked-point') return point
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (rect) {
+      const intersection = hitPathIntersection(rect.left+rect.width/2+(x-viewport.centerX)*viewport.scale, rect.top+rect.height/2-(y-viewport.centerY)*viewport.scale)
+      if (intersection) return { ...intersection, label:point.label }
+    }
+    const points = new Map(visibleGeometry.filter((item): item is GeometryPoint => item.kind === 'point').map(item => [item.id,item]))
+    let closest: { path: GeometryPath; projection: { x:number; y:number; t:number }; distance:number } | null = null
+    for (const path of visibleGeometry) {
+      if (!path.visible || !['line','segment','ray','vector'].includes(path.kind)) continue
+      const projection=projectPointToPath(path as GeometryPath,points,x,y)
+      if (!projection) continue
+      const distance=Math.hypot(projection.x-x,projection.y-y)*viewport.scale
+      if (distance<9 && (!closest || distance<closest.distance)) closest={path:path as GeometryPath,projection,distance}
+    }
+    return closest ? { ...point, x:closest.projection.x, y:closest.projection.y, onPath:{pathId:closest.path.id,t:closest.projection.t} } : point
+
   }
 
   function createAt(clientX: number, clientY: number) {
-    if (geometryTool === 'envelope') return
+    if (geometryTool === 'envelope' || geometryTool === 'curve-locus') return
     if (geometryTool === 'transform') {
       const target = hitTransformTarget(clientX, clientY)
       setSelectedGeometryId(target?.id ?? null)
@@ -972,34 +994,12 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
 
   function deleteSelectedPoint() {
     if (!selectedPointId) return
-    const removedIds = new Set([selectedPointId])
-    geometry.forEach((object) => {
-      if ((object.kind === 'line' || object.kind === 'segment' || object.kind === 'ray' || object.kind === 'vector') && (object.startId === selectedPointId || object.endId === selectedPointId)) removedIds.add(object.id)
-      if (object.kind === 'polygon' && object.pointIds.includes(selectedPointId)) removedIds.add(object.id)
-      if (object.kind === 'circle' && (object.centerId === selectedPointId || object.radiusPointId === selectedPointId)) removedIds.add(object.id)
-      if (object.kind === 'ellipse' && [object.centerId, object.axisXId, object.axisYId].includes(selectedPointId)) removedIds.add(object.id)
-      if (object.kind === 'conic' && object.pointIds.includes(selectedPointId)) removedIds.add(object.id)
-      if (object.kind === 'locus' && (object.pointId === selectedPointId || object.centerId === selectedPointId)) removedIds.add(object.id)
-    })
-    let changed = true
-    while (changed) {
-      changed = false
-      geometry.forEach((object) => {
-        if (object.kind === 'transform' && removedIds.has(object.sourceId) && !removedIds.has(object.id)) { removedIds.add(object.id); changed = true }
-      })
-    }
-    onGeometryChange(geometry.filter((object) => {
-      if (removedIds.has(object.id)) return false
-      if (object.kind !== 'measurement') return true
-      return object.measure === 'distance' || object.measure === 'angle'
-        ? !object.pointIds?.some((id) => removedIds.has(id))
-        : !removedIds.has(object.polygonId ?? '')
-    }))
+    onGeometryChange(removeGeometryObjects(geometry, [selectedPointId]))
     setSelectedPointId(null)
   }
 
   const mainTools: GeometryTool[] = ['select', 'point', 'line', 'vector']
-  const moreTools: GeometryTool[] = ['linked-point', 'segment', 'ray', 'polygon', 'circle', 'ellipse', 'conic', 'locus', 'envelope', 'distance', 'angle', 'perimeter', 'area', 'transform']
+  const moreTools: GeometryTool[] = ['linked-point', 'segment', 'ray', 'polygon', 'circle', 'ellipse', 'conic', 'locus', 'curve-locus', 'envelope', 'distance', 'angle', 'perimeter', 'area', 'transform']
   const toolButton = (tool: GeometryTool, showLabel = false) => <button key={tool} type="button" className={geometryTool === tool ? 'active' : ''} aria-label={tool === 'linked-point' ? 'Sheet point' : tool} data-tooltip={tool === 'linked-point' ? 'Sheet point' : tool[0].toUpperCase() + tool.slice(1)} aria-pressed={geometryTool === tool} onClick={() => { setGeometryTool(tool); setPendingVertices([]) }}>
     {tool === 'select' ? <MousePointer2 /> : tool === 'point' ? <CircleDot /> : tool === 'linked-point' ? <Link /> : ['line', 'segment', 'ray', 'vector', 'perimeter', 'area'].includes(tool) ? <ConstructionGlyph kind={tool as 'line' | 'segment' | 'ray' | 'vector' | 'perimeter' | 'area'} /> : tool === 'polygon' ? <Pentagon /> : tool === 'circle' ? <Circle /> : tool === 'ellipse' ? <Ellipse /> : tool === 'conic' ? <DraftingCompass /> : tool === 'locus' ? <Orbit /> : tool === 'envelope' ? <Waves /> : tool === 'distance' ? <Ruler /> : tool === 'angle' ? <Triangle /> : tool === 'transform' ? <Move /> : <Crosshair />}
     {showLabel && <span>{tool[0].toUpperCase() + tool.slice(1)}</span>}
@@ -1033,7 +1033,12 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
           const drag = dragRef.current
           if (drag.kind === 'point') {
             const position = worldPoint(event.clientX, event.clientY)
-            if (position && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 2) setPreviewPoint({ id: drag.id, ...position })
+            if (position && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 2) {
+              const source = geometry.find((item): item is GeometryPoint => item.id===drag.id && item.kind==='point')
+              const path = source?.onPath && geometry.find((item): item is GeometryPath => item.id===source.onPath!.pathId && ['line','segment','ray','vector'].includes(item.kind))
+              const projected = path ? projectPointToPath(path,new Map(visibleGeometry.filter((item): item is GeometryPoint=>item.kind==='point').map(item=>[item.id,item])),position.x,position.y) : position
+              if (projected) setPreviewPoint({id:drag.id,x:projected.x,y:projected.y})
+            }
             return
           }
           setViewport({
@@ -1047,7 +1052,13 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
           if (drag?.kind === 'point') {
             const position = worldPoint(event.clientX, event.clientY)
             if (position && previewPoint?.id === drag.id) {
-              onGeometryChange(geometry.map((object) => object.kind === 'point' && object.id === drag.id ? { ...object, ...position } : object))
+              onGeometryChange(geometry.map((object) => {
+                if (object.kind!=='point' || object.id!==drag.id) return object
+                if (!object.onPath) return { ...object, ...position }
+                const path=geometry.find((item): item is GeometryPath=>item.id===object.onPath!.pathId && ['line','segment','ray','vector'].includes(item.kind))
+                const projected=path && projectPointToPath(path,new Map(visibleGeometry.filter((item): item is GeometryPoint=>item.kind==='point').map(item=>[item.id,item])),position.x,position.y)
+                return projected ? { ...object,x:projected.x,y:projected.y,onPath:{...object.onPath,t:projected.t} } : object
+              }))
             }
             setPreviewPoint(null)
           } else if (drag?.kind === 'pan' && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) {
@@ -1083,13 +1094,28 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
       />
       <div className="geometry-toolbar" role="toolbar" aria-label="Geometry tools">
         <div className="geometry-main-tools">{mainTools.map((tool) => toolButton(tool, true))}</div>
+        {geometry.some(item => item.kind === 'tangent') && <details><summary>Saved tangents</summary>{geometry.filter(item => item.kind === 'tangent').map(item => <button key={item.id} type="button" onClick={() => onGeometryChange(geometry.filter(object => object.id !== item.id))}>Remove tangent at x = {item.kind === 'tangent' ? formatNumber(item.x) : ''}</button>)}</details>}
         <details className="geometry-more"><summary>{moreTools.includes(geometryTool) ? geometryTool.replace('-', ' ') : 'More tools'}</summary><div>{moreTools.map((tool) => toolButton(tool, true))}</div></details>
         {geometryTool === 'linked-point' && <><label> x cell <input value={linkedXCell} onChange={(event) => setLinkedXCell(event.target.value.toUpperCase())} /></label><label> y cell <input value={linkedYCell} onChange={(event) => setLinkedYCell(event.target.value.toUpperCase())} /></label></>}
+        {geometryTool === 'curve-locus' && <>
+          {(['x','y','start','end'] as const).map(key=><label key={key}>{key==='x' || key==='y' ? `${key}(t)` : key}<input value={locusInput[key]} onChange={event=>setLocusInput(current=>({...current,[key]:event.target.value}))} /></label>)}
+          <button type="button" onClick={()=>{
+            try {
+              const start=Number(locusInput.start),end=Number(locusInput.end)
+              if (!locusInput.start.trim() || !locusInput.end.trim() || !Number.isFinite(start) || !Number.isFinite(end) || start>=end) throw new Error('Enter increasing finite parameter bounds.')
+              const object={id:crypto.randomUUID(),kind:'curve-locus' as const,xExpression:locusInput.x,yExpression:locusInput.y,start,end,color:'#805fc2',visible:true}
+              sampleCurveLocus(object,{...linkedValues,a:parameterA});onGeometryChange([...geometry,object]);setConstructionError('');setGeometryTool('select')
+            } catch(error) {setConstructionError(error instanceof Error ? error.message : 'Invalid locus.')}
+          }}>Create sampled locus</button>
+          {constructionError && <span role="alert">{constructionError}</span>}
+        </>}
         {geometryTool === 'envelope' && <><label>m(t)<input aria-label="Line family slope m of t" value={envelopeInput.slope} onChange={(event) => setEnvelopeInput((current) => ({ ...current, slope: event.target.value }))} /></label><label>b(t)<input aria-label="Line family intercept b of t" value={envelopeInput.intercept} onChange={(event) => setEnvelopeInput((current) => ({ ...current, intercept: event.target.value }))} /></label><label>t from<input aria-label="Envelope parameter start" type="number" value={envelopeInput.start} onChange={(event) => setEnvelopeInput((current) => ({ ...current, start: event.target.value }))} /></label><label>to<input aria-label="Envelope parameter end" type="number" value={envelopeInput.end} onChange={(event) => setEnvelopeInput((current) => ({ ...current, end: event.target.value }))} /></label><button type="button" className="geometry-finish" onClick={createEnvelope}>Create envelope</button></>}
         {geometryTool === 'transform' && <>
           <select aria-label="Transformation" value={transformOperation} onChange={(event) => setTransformOperation(event.target.value as TransformOperation)}>
-            <option value="translate">Translate</option><option value="reflect-x">Reflect across x-axis</option><option value="reflect-y">Reflect across y-axis</option><option value="reflect-origin">Reflect across origin</option><option value="rotate">Rotate</option><option value="dilate">Dilate</option><option value="invert">Invert in circle</option>
+            <option value="translate">Translate</option><option value="reflect-x">Reflect across x-axis</option><option value="reflect-y">Reflect across y-axis</option><option value="reflect-origin">Reflect across origin</option><option value="reflect-line">Reflect across a constructed line</option><option value="rotate">Rotate</option><option value="dilate">Dilate</option><option value="invert">Invert in circle</option><option value="matrix">2 × 2 matrix transform</option>
           </select>
+          {transformOperation === 'reflect-line' && <label>Mirror line<select aria-label="Reflection line" value={reflectionLineId} onChange={event => setReflectionLineId(event.target.value)}><option value="">Choose a path</option>{geometry.filter(item => ['line', 'segment', 'ray', 'vector'].includes(item.kind)).map(item => <option key={item.id} value={item.id}>{item.kind} {item.id.slice(0, 6)}</option>)}</select></label>}
+          {transformOperation==='matrix' && <label>Matrix rows<input aria-label="Two by two transformation matrix" value={matrixInput} onChange={event=>setMatrixInput(event.target.value)} placeholder="1, 0; 0, 1" /></label>}
           {transformOperation === 'translate' && <><label>Δx <input aria-label="Horizontal translation" value={transformValues.dx} onChange={(event) => setTransformValues({ ...transformValues, dx: event.target.value })} /></label><label>Δy <input aria-label="Vertical translation" value={transformValues.dy} onChange={(event) => setTransformValues({ ...transformValues, dy: event.target.value })} /></label></>}
           {['rotate', 'dilate', 'invert'].includes(transformOperation) && <><label>Center x <input aria-label="Center x coordinate" value={transformValues.centerX} onChange={(event) => setTransformValues({ ...transformValues, centerX: event.target.value })} /></label><label>y <input aria-label="Center y coordinate" value={transformValues.centerY} onChange={(event) => setTransformValues({ ...transformValues, centerY: event.target.value })} /></label></>}
           {transformOperation === 'rotate' && <label>° <input aria-label="Rotation angle in degrees" value={transformValues.angleDegrees} onChange={(event) => setTransformValues({ ...transformValues, angleDegrees: event.target.value })} /></label>}
@@ -1101,7 +1127,8 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         {geometryTool === 'polygon' && pendingVertices.length > 0 && <button type="button" className="geometry-finish" onClick={finishPolygon} disabled={pendingVertices.length < 3}>Finish polygon</button>}
         {pendingVertices.length > 0 && <button type="button" className="geometry-cancel" onClick={() => setPendingVertices([])} aria-label="Cancel construction">Cancel</button>}
         {selectedPointId && <button type="button" className="geometry-delete" onClick={deleteSelectedPoint} aria-label="Delete selected point and dependent objects">Delete point</button>}
-        {geometryTool !== 'select' && geometryTool !== 'transform' && geometryTool !== 'envelope' && <span className="geometry-hint">{geometryTool === 'point' ? 'Click to add a point; snap near intersections' : geometryTool === 'linked-point' ? 'Click to add a point linked to these sheet cells' : geometryTool === 'conic' ? `Select five points · ${pendingVertices.length}/5` : geometryTool === 'ellipse' ? `Select center, x-axis point, and y-axis point · ${pendingVertices.length}/3` : geometryTool === 'locus' ? `Select moving point and rotation center · ${pendingVertices.length}/2` : geometryTool === 'polygon' ? `${pendingVertices.length} vertices · finish at 3 or more` : geometryTool === 'distance' ? `Select ${pendingVertices.length}/2 points` : geometryTool === 'angle' ? `Select ${pendingVertices.length}/3 points` : geometryTool === 'area' || geometryTool === 'perimeter' ? 'Click a polygon' : pendingVertices.length ? 'Click the second endpoint' : 'Click two endpoints'}</span>}
+        {(() => {const point=geometry.find((item):item is GeometryPoint=>item.id===selectedPointId && item.kind==='point');return point ? <PointCoordinates key={point.id} point={point} onChange={next=>onGeometryChange(geometry.map(item=>item.id===next.id ? next : item))} /> : null})()}
+        {geometryTool !== 'select' && geometryTool !== 'transform' && geometryTool !== 'envelope' && geometryTool !== 'curve-locus' && <span className="geometry-hint">{geometryTool === 'point' ? 'Click to add a point; snap near intersections' : geometryTool === 'linked-point' ? 'Click to add a point linked to these sheet cells' : geometryTool === 'conic' ? `Select five points · ${pendingVertices.length}/5` : geometryTool === 'ellipse' ? `Select center, x-axis point, and y-axis point · ${pendingVertices.length}/3` : geometryTool === 'locus' ? `Select moving point and rotation center · ${pendingVertices.length}/2` : geometryTool === 'polygon' ? `${pendingVertices.length} vertices · finish at 3 or more` : geometryTool === 'distance' ? `Select ${pendingVertices.length}/2 points` : geometryTool === 'angle' ? `Select ${pendingVertices.length}/3 points` : geometryTool === 'area' || geometryTool === 'perimeter' ? 'Click a polygon' : pendingVertices.length ? 'Click the second endpoint' : 'Click two endpoints'}</span>}
       </div>
       <div className="graph-controls" aria-label="Graph controls">
         <button type="button" onClick={() => setViewport((current) => ({ ...current, scale: Math.min(maxScale, current.scale * buttonZoomFactor) }))} aria-label="Zoom in">+</button>
@@ -1138,6 +1165,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         <div className="trace-card" role="status">
           <span className="trace-dot" style={{ backgroundColor: tracedGraph.color }} aria-hidden="true" />
           <span>x {formatNumber(trace.x)} · y {formatNumber(tracedY)}{Number.isFinite(tracedSlope) ? ` · slope ${formatNumber(tracedSlope)}` : ''}</span>
+          {Number.isFinite(tracedSlope) && <button type="button" onClick={() => onGeometryChange([...geometry, { id: crypto.randomUUID(), kind: 'tangent', expressionId: tracedGraph.id, x: trace.x, color: tracedGraph.color, visible: true }])}>Save tangent</button>}
           <button type="button" onClick={() => setTrace(null)} aria-label="Clear trace">×</button>
         </div>
       )}

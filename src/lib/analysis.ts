@@ -75,7 +75,7 @@ function sample(evaluate: (x: number) => number, minX: number, maxX: number): nu
   return Array.from({ length: sampleCount + 1 }, (_, index) => evaluate(minX + (maxX - minX) * index / sampleCount))
 }
 
-function findZeroes(evaluate: (x: number) => number, minX: number, maxX: number): number[] {
+export function findZeroes(evaluate: (x: number) => number, minX: number, maxX: number): number[] {
   if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX) return []
   const values = sample(evaluate, minX, maxX)
   // Coincident curves have infinitely many intersections, not a list of isolated points.
@@ -88,6 +88,7 @@ function findZeroes(evaluate: (x: number) => number, minX: number, maxX: number)
     if (zeroes.some((other) => Math.abs(other - x) < step * 0.2)) return
     if (zeroes.length < maxResults) zeroes.push(x)
   }
+  if (values[sampleCount] === 0) add(maxX, 0)
 
   for (let index = 0; index < sampleCount && zeroes.length < maxResults; index += 1) {
     const leftValue = values[index]

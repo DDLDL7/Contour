@@ -8,10 +8,12 @@ import { replaceNotebookVariables, type NotebookCell, type NotebookOperation } f
 import type { ParameterRange, SliderParameter } from '../lib/parameters'
 import type { ExpressionRow } from '../lib/project'
 import { NotebookGraphCell, NotebookTableCell } from './NotebookLinks'
+import { NotebookAnswer } from './NotebookAnswer'
 import { activityTemplates, type ActivityTemplate } from '../lib/activities'
 import { activeSpreadsheetSheet, evaluateSpreadsheet, spreadsheetSheets, type SpreadsheetData } from '../lib/spreadsheet'
 
 interface Props {
+  darkMode?: boolean
   cells: NotebookCell[]
   expressions: ExpressionRow[]
   definitions: Readonly<Record<string, number>>
@@ -86,7 +88,7 @@ function NotebookParameterInput({ cell, parameters, onValueChange }: { cell: Ext
   </form>
 }
 
-export function NotebookView({ cells, expressions, definitions, parameterA, parameterARange, parameters, spreadsheet, onChange, onToggleExpression, onParameterValueChange, onSetParameter, onExpressionChange, onCreateExpression, onSpreadsheetCellChange, onAddActivity }: Props) {
+export function NotebookView({ darkMode = false, cells, expressions, definitions, parameterA, parameterARange, parameters, spreadsheet, onChange, onToggleExpression, onParameterValueChange, onSetParameter, onExpressionChange, onCreateExpression, onSpreadsheetCellChange, onAddActivity }: Props) {
   const values = useMemo(() => ({ a: parameterA, ...definitions }), [parameterA, definitions])
   const allParameters = useMemo(() => [{ name: 'a', value: parameterA, ...parameterARange }, ...parameters], [parameterA, parameterARange, parameters])
   const graphDefinitions = useMemo(() => ({ a: parameterA, ...definitions, ...Object.fromEntries(Object.entries(evaluateSpreadsheet(spreadsheet, definitions, parameterA)).flatMap(([address, value]) => value.value === null ? [] : [[address, value.value]])) }), [spreadsheet, definitions, parameterA])
@@ -96,6 +98,7 @@ export function NotebookView({ cells, expressions, definitions, parameterA, para
     if (atLimit) return
     const id = crypto.randomUUID()
     const next: NotebookCell = kind === 'text' ? { id, kind, content: '' }
+      : kind === 'answer' ? { id, kind, prompt: 'Write an equivalent expression.', expected: '(x+1)^2', response: '' }
       : kind === 'calculation' ? { id, kind, expression: '', operation: 'calculate' }
         : kind === 'visibility' ? { id, kind, label: 'Show graph', expressionId: expressions[0]?.id ?? '' }
           : kind === 'input' ? { id, kind, label: 'Set parameter', parameterName: 'a' }
@@ -122,6 +125,7 @@ export function NotebookView({ cells, expressions, definitions, parameterA, para
     <div className="notebook-templates" aria-label="Activity starters"><strong>Start an activity</strong>{activityTemplates.map((template) => <button type="button" className="notebook-action-button" key={template.id} disabled={cells.length + template.cells > 60 || (template.id === 'data' && spreadsheetSheets(spreadsheet).length >= 20)} onClick={() => onAddActivity(template.id)}>{template.label}</button>)}<p>Append linked examples and prompts to this notebook. Your existing work stays in place.</p></div>
     <div className="notebook-toolbar" aria-label="Add notebook cell">
       <button type="button" disabled={atLimit} onClick={() => add('text')}><FileText size={16} /> Add note</button>
+      <button type="button" disabled={atLimit} onClick={() => add('answer')}>Add answer check</button>
       <button type="button" disabled={atLimit} onClick={() => add('calculation')}><Calculator size={16} /> Add calculation</button>
       <button type="button" disabled={atLimit} onClick={() => add('visibility')}><Eye size={16} /> Add graph checkbox</button>
       <button type="button" disabled={atLimit} onClick={() => add('input')}><FormInput size={16} /> Add input box</button>
@@ -131,16 +135,17 @@ export function NotebookView({ cells, expressions, definitions, parameterA, para
     </div>
     {cells.length === 0 && <div className="notebook-empty"><FileText size={28} /><strong>Your notebook is blank</strong><p>Add a note, a live calculation, or a control for a graph or parameter.</p><button type="button" onClick={() => add('text')}><Plus size={16} /> Add first note</button></div>}
     <div className="notebook-cells">{cells.map((cell, index) => <section className="notebook-cell" key={cell.id} aria-label={`${cell.kind} cell ${index + 1}`}>
-      <div className="notebook-cell-head"><span>{index + 1} · {cell.kind === 'text' ? 'Note' : cell.kind === 'calculation' ? 'Calculation' : cell.kind === 'visibility' ? 'Graph checkbox' : cell.kind === 'input' ? 'Input box' : cell.kind === 'graph' ? 'Graph' : cell.kind === 'table' ? 'Table' : 'Action button'}</span><div>
+      <div className="notebook-cell-head"><span>{index + 1} · {cell.kind === 'answer' ? 'Answer check' : cell.kind === 'text' ? 'Note' : cell.kind === 'calculation' ? 'Calculation' : cell.kind === 'visibility' ? 'Graph checkbox' : cell.kind === 'input' ? 'Input box' : cell.kind === 'graph' ? 'Graph' : cell.kind === 'table' ? 'Table' : 'Action button'}</span><div>
         <button type="button" aria-label={`Move cell ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={15} /></button>
         <button type="button" aria-label={`Move cell ${index + 1} down`} title="Move down" disabled={index === cells.length - 1} onClick={() => move(index, 1)}><ArrowDown size={15} /></button>
         <button type="button" aria-label={`Remove cell ${index + 1}`} title="Remove cell" onClick={() => onChange(cells.filter((item) => item.id !== cell.id))}><Trash2 size={15} /></button>
       </div></div>
+      {cell.kind === 'answer' && <NotebookAnswer cell={cell} definitions={definitions} parameterA={parameterA} onChange={change => update(cell.id, change, true)} />}
       {cell.kind === 'text' && <><textarea aria-label={`Note ${index + 1}`} maxLength={4000} rows={4} placeholder="Write a note. Use {{a}} for a live variable or $x^2$ for maths." value={cell.content} onChange={(event) => update(cell.id, { content: event.target.value }, true)} />{cell.content.trim() && <NotebookText content={cell.content} values={values} />}</>}
       {cell.kind === 'calculation' && <><label className="notebook-operation">Method<select value={cell.operation} onChange={(event) => update(cell.id, { operation: event.target.value as NotebookOperation })}><option value="calculate">Calculate</option><option value="simplify">Simplify</option><option value="differentiate">Differentiate with respect to x</option></select></label><div className="notebook-equation"><EquationField id={`notebook-${cell.id}`} label={`Calculation ${index + 1} expression`} value={cell.expression} latex={cell.latex} placeholder="2a + 3" onChange={(expression, latex) => update(cell.id, { expression, latex }, true)} /></div><NotebookCalculation cell={cell} definitions={definitions} parameterA={parameterA} /></>}
       {cell.kind === 'visibility' && <div className="notebook-visibility"><label>Label<input type="text" maxLength={120} value={cell.label} onChange={(event) => update(cell.id, { label: event.target.value }, true)} /></label><label>Graph<select value={cell.expressionId} onChange={(event) => update(cell.id, { expressionId: event.target.value })}><option value="">Choose an expression</option>{expressions.map((row, rowIndex) => <option key={row.id} value={row.id}>{rowIndex + 1}. {row.text || 'Empty expression'}</option>)}</select></label>{(() => { const linked = expressions.find((row) => row.id === cell.expressionId); return <label className="notebook-check"><input type="checkbox" checked={linked?.visible ?? false} disabled={!linked} onChange={(event) => { if (linked) onToggleExpression(linked.id, event.target.checked) }} />{cell.label || 'Show graph'}</label> })()}</div>}
       {cell.kind === 'input' && <div className="notebook-input-cell"><label>Label<input type="text" maxLength={120} value={cell.label} onChange={(event) => update(cell.id, { label: event.target.value }, true)} /></label><label>Parameter<select value={cell.parameterName} onChange={(event) => update(cell.id, { parameterName: event.target.value })}>{allParameters.map((parameter) => <option key={parameter.name} value={parameter.name}>{parameter.name}</option>)}{!allParameters.some((parameter) => parameter.name === cell.parameterName) && <option value={cell.parameterName}>Missing parameter {cell.parameterName}</option>}</select></label><NotebookParameterInput cell={cell} parameters={allParameters} onValueChange={onParameterValueChange} /></div>}
-      {cell.kind === 'graph' && <NotebookGraphCell cell={cell} expressions={expressions} definitions={graphDefinitions} parameterA={parameterA} onLink={(expressionId) => update(cell.id, { expressionId })} onBounds={(bounds) => update(cell.id, { bounds })} onExpressionChange={onExpressionChange} onCreateExpression={() => onCreateExpression(cell.id)} onToggleExpression={onToggleExpression} />}
+      {cell.kind === 'graph' && <NotebookGraphCell darkMode={darkMode} cell={cell} expressions={expressions} definitions={graphDefinitions} parameterA={parameterA} onLink={(expressionId) => update(cell.id, { expressionId })} onBounds={(bounds) => update(cell.id, { bounds })} onExpressionChange={onExpressionChange} onCreateExpression={() => onCreateExpression(cell.id)} onToggleExpression={onToggleExpression} />}
       {cell.kind === 'table' && <NotebookTableCell cell={cell} spreadsheet={spreadsheet} definitions={definitions} parameterA={parameterA} onLink={(sheetId) => update(cell.id, { sheetId })} onRows={(rows) => update(cell.id, { rows })} onCellChange={onSpreadsheetCellChange} />}
       {cell.kind === 'action' && <div className="notebook-action-cell"><label>Button label<input type="text" maxLength={120} value={cell.label} onChange={(event) => update(cell.id, { label: event.target.value }, true)} /></label><label>Action<select value={cell.action} onChange={(event) => update(cell.id, { action: event.target.value as typeof cell.action })}><option value="toggle-expression">Toggle graph visibility</option><option value="set-parameter">Set a parameter value</option></select></label>{cell.action === 'toggle-expression' ? <label>Expression<select value={cell.expressionId} onChange={(event) => update(cell.id, { expressionId: event.target.value })}>{expressions.map((row, rowIndex) => <option key={row.id} value={row.id}>{rowIndex + 1}. {row.text || 'Empty expression'}</option>)}</select></label> : <><label>Parameter<select value={cell.parameterName} onChange={(event) => update(cell.id, { parameterName: event.target.value })}>{allParameters.map((parameter) => <option key={parameter.name} value={parameter.name}>{parameter.name}</option>)}</select></label><label>Value<input type="number" step="any" value={cell.value} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value)) update(cell.id, { value }) }} /></label></>}<button type="button" className="notebook-action-button" onClick={() => { if (cell.action === 'toggle-expression') { const linked = expressions.find((row) => row.id === cell.expressionId); if (linked) onToggleExpression(linked.id, !linked.visible) } else onSetParameter(cell.parameterName, cell.value) }} disabled={cell.action === 'toggle-expression' && !expressions.some((row) => row.id === cell.expressionId)}>{cell.label || 'Run action'}</button><p>Action buttons run one of the listed, local workspace changes. Imported project code never runs.</p></div>}
     </section>)}</div>

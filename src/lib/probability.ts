@@ -5,6 +5,15 @@ export interface ProbabilityInput { distribution: DistributionName; x: number; f
 export interface ProbabilityResult { densityOrMass: number; cumulative: number; measure: 'density' | 'mass'; label: string }
 export interface DistributionPlotPoint { x: number; y: number }
 
+export function intervalProbability(input: Omit<ProbabilityInput, 'x'>, lower: number, upper: number): number {
+  if (!Number.isFinite(lower) || !Number.isFinite(upper) || lower > upper) throw new Error('Enter finite interval bounds with lower ≤ upper.')
+  const discrete = input.distribution === 'binomial' || input.distribution === 'poisson'
+  const before = discrete ? Math.ceil(lower) - 1 : lower
+  const hi = calculateProbability({ ...input, x: upper }).cumulative
+  const lo = calculateProbability({ ...input, x: before }).cumulative
+  return Math.max(0, Math.min(1, hi - lo))
+}
+
 function logGamma(value: number): number { return Number(lgamma(value)) }
 
 function regularizedGammaP(a: number, x: number): number {

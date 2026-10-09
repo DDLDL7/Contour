@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ArrowRight, Blocks, Braces, Calculator, ChartArea, ChartScatter, ChartSpline, Equal, Expand, FunctionSquare, Grid2X2, Grid3X3, Hourglass, ListFilter, Replace, Sigma, SquareFunction, Table2, Target, TrendingUp, Variable, Waypoints, type LucideIcon } from 'lucide-react'
 import { EquationField } from './EquationField'
 import { MathResult } from './MathResult'
+import { SymbolicTools } from './SymbolicTools'
+import { DifferentialTools } from './DifferentialTools'
 import { runMathTool, type MathTool, type MatrixOperation, type ToolResult } from '../lib/mathTools'
 
 interface Props { parameterA: number; definitions: Readonly<Record<string, number>> }
@@ -37,6 +39,8 @@ const tools: { id: MathTool; label: string; example: string; hint: string; group
 ]
 
 export function MathTools({ parameterA, definitions }: Props) {
+  const [symbolic, setSymbolic] = useState(false)
+  const [differential, setDifferential] = useState(false)
   const [tool, setTool] = useState<MathTool>('calculate')
   const [input, setInput] = useState(tools[0].example)
   const [latex, setLatex] = useState<string | undefined>()
@@ -99,7 +103,8 @@ export function MathTools({ parameterA, definitions }: Props) {
         <h2>Work through a calculation</h2>
         <p>Choose a method, enter your expression, and inspect the result. The current value of <em>a</em> and any valid variables in your workspace are available in formulas.</p>
       </div>
-      <div className="math-tools-grid">
+      <div className="math-engine-picker" aria-label="Maths tool family"><button type="button" aria-pressed={!symbolic && !differential} onClick={() => { setSymbolic(false); setDifferential(false) }}>Quick & numerical tools</button><button type="button" aria-pressed={symbolic} onClick={() => { setSymbolic(true); setDifferential(false) }}>Exact symbolic tools</button><button type="button" aria-pressed={differential} onClick={() => { setSymbolic(false); setDifferential(true) }}>Differential equations</button></div>
+      {differential ? <DifferentialTools parameterA={parameterA} definitions={definitions} /> : symbolic ? <SymbolicTools parameterA={parameterA} definitions={definitions} /> : <div className="math-tools-grid">
         <label className="math-tool-mobile-picker">Method
           <select value={tool} onChange={(event) => selectTool(event.target.value as MathTool)}>
             {groups.map((group) => <optgroup key={group.id} label={group.label}>{tools.filter((item) => item.group === group.id).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
@@ -138,7 +143,7 @@ export function MathTools({ parameterA, definitions }: Props) {
           {error && calculatedInputs === inputSignature && <p className="math-tool-error" role="alert">{error}</p>}
           {result && calculatedInputs === inputSignature && <div className="math-tool-result" role="status"><span>{result.title}</span><MathResult value={result.value} />{result.note && <p>{result.note}</p>}</div>}
         </section>
-      </div>
+      </div>}
     </div>
   )
 }

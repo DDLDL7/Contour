@@ -2,6 +2,7 @@ export type NotebookOperation = 'calculate' | 'simplify' | 'differentiate'
 
 export type NotebookCell =
   | { id: string; kind: 'text'; content: string }
+  | { id: string; kind: 'answer'; prompt: string; expected: string; response: string }
   | { id: string; kind: 'calculation'; expression: string; latex?: string; operation: NotebookOperation }
   | { id: string; kind: 'visibility'; label: string; expressionId: string }
   | { id: string; kind: 'input'; label: string; parameterName: string }
@@ -18,6 +19,8 @@ export function areNotebookCells(value: unknown): value is NotebookCell[] {
     if (typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id)) return false
     ids.add(item.id)
     if (item.kind === 'text') return typeof item.content === 'string' && item.content.length <= 4000
+    if (item.kind === 'answer') return typeof item.prompt === 'string' && item.prompt.length <= 4000
+      && typeof item.expected === 'string' && item.expected.length <= 1000 && typeof item.response === 'string' && item.response.length <= 1000
     if (item.kind === 'calculation') return typeof item.expression === 'string' && item.expression.length <= 1000
       && (item.latex === undefined || (typeof item.latex === 'string' && item.latex.length <= 2000))
       && typeof item.operation === 'string' && ['calculate', 'simplify', 'differentiate'].includes(item.operation)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { calculateProbability, sampleDistribution, type DistributionName, type DistributionPlotPoint } from '../lib/probability'
+import { calculateProbability, intervalProbability, sampleDistribution, type DistributionName, type DistributionPlotPoint } from '../lib/probability'
 import { formatNumber } from '../lib/math'
 
 const distributionInfo: Record<DistributionName, { label: string; firstLabel: string; secondLabel?: string; firstDefault: string; secondDefault?: string; note: string }> = {
@@ -15,6 +15,9 @@ export function ProbabilityCalculator() {
   const [x, setX] = useState('1')
   const [first, setFirst] = useState('0')
   const [second, setSecond] = useState('1')
+  const [lower, setLower] = useState('-1')
+  const [upper, setUpper] = useState('1')
+  const [interval, setInterval] = useState<number | null>(null)
   const [result, setResult] = useState<ReturnType<typeof calculateProbability> | null>(null)
   const [plot, setPlot] = useState<DistributionPlotPoint[]>([])
   const [error, setError] = useState('')
@@ -22,6 +25,7 @@ export function ProbabilityCalculator() {
 
   function clearResult() {
     setResult(null)
+    setInterval(null)
     setPlot([])
     setError('')
   }
@@ -39,10 +43,13 @@ export function ProbabilityCalculator() {
       const firstParameter = Number(first)
       const secondParameter = info.secondLabel ? Number(second) : 0
       setResult(calculateProbability({ distribution, x: Number(x), firstParameter, secondParameter }))
+      if (!lower.trim() || !upper.trim()) throw new Error('Enter both interval bounds.')
+      setInterval(intervalProbability({ distribution, firstParameter, secondParameter }, Number(lower), Number(upper)))
       setPlot(sampleDistribution({ distribution, firstParameter, secondParameter }))
       setError('')
     } catch (cause) {
       setResult(null)
+      setInterval(null)
       setPlot([])
       setError(cause instanceof Error ? cause.message : 'Could not calculate this probability.')
     }
@@ -55,26 +62,31 @@ export function ProbabilityCalculator() {
       <label>{distribution === 'binomial' || distribution === 'poisson' ? 'Observation x' : 'Value x'}<input type="number" value={x} onChange={(event) => { setX(event.target.value); clearResult() }} /></label>
       <label>{info.firstLabel}<input type="number" value={first} onChange={(event) => { setFirst(event.target.value); clearResult() }} /></label>
       {info.secondLabel && <label>{info.secondLabel}<input type="number" value={second} onChange={(event) => { setSecond(event.target.value); clearResult() }} /></label>}
+      <label>Interval lower<input type="number" value={lower} onChange={event => { setLower(event.target.value); clearResult() }} /></label>
+      <label>Interval upper<input type="number" value={upper} onChange={event => { setUpper(event.target.value); clearResult() }} /></label>
       <button type="button" onClick={calculate}>Calculate</button>
     </div>
     <p className="probability-note">{info.note}</p>
     {error && <p className="probability-error" role="alert">{error}</p>}
     {result && <>
       <div className="probability-result" role="status"><div><span>{result.label}</span><strong>{result.measure === 'mass' ? 'P(X = x)' : 'Density'}</strong><b>{formatNumber(result.densityOrMass, 7)}</b></div><div><span>{result.label}</span><strong>P(X ≤ x)</strong><b>{formatNumber(result.cumulative, 7)}</b></div></div>
-      {plot.length > 1 && <DistributionPlot points={plot} discrete={result.measure === 'mass'} label={result.label} />}
+      <p role="status">P({lower} ≤ X ≤ {upper}) = {formatNumber(interval ?? 0, 7)}</p>
+      {plot.length > 1 && <DistributionPlot points={plot} discrete={result.measure === 'mass'} label={result.label} lower={Number(lower)} upper={Number(upper)} />}
     </>}
   </section>
 }
 
-function DistributionPlot({ points, discrete, label }: { points: DistributionPlotPoint[]; discrete: boolean; label: string }) {
+function DistributionPlot({ points, discrete, label, lower, upper }: { points: DistributionPlotPoint[]; discrete: boolean; label: string; lower: number; upper: number }) {
   const minX = points[0].x; const maxX = points[points.length - 1].x
   const maxY = Math.max(...points.map((point) => point.y), 1e-12)
   const x = (value: number) => 30 + (value - minX) / (maxX - minX || 1) * 360
   const y = (value: number) => 174 - value / maxY * 145
   const path = points.map((point, index) => `${index ? 'L' : 'M'}${x(point.x).toFixed(2)},${y(point.y).toFixed(2)}`).join(' ')
+  const selected = points.filter(point => point.x >= lower && point.x <= upper)
+  const shade = selected.length ? `M${x(selected[0].x)},174 ${selected.map(point => `L${x(point.x)},${y(point.y)}`).join(' ')} L${x(selected[selected.length - 1].x)},174 Z` : ''
   return <svg className="distribution-plot" viewBox="0 0 420 205" role="img" aria-label={`Probability plot for ${label}`}>
     <line x1="30" y1="174" x2="390" y2="174" className="chart-axis" />
-    {discrete ? points.map((point, index) => <rect key={index} x={x(point.x) - 2} y={y(point.y)} width="4" height={174 - y(point.y)} className="distribution-bar"><title>x = {formatNumber(point.x, 3)} · {formatNumber(point.y, 6)}</title></rect>) : <path d={path} className="distribution-density" />}
+    {discrete ? points.map((point, index) => <rect key={index} x={x(point.x) - 2} y={y(point.y)} width="4" height={174 - y(point.y)} opacity={point.x >= lower && point.x <= upper ? 1 : .25} className="distribution-bar"><title>x = {formatNumber(point.x, 3)} · {formatNumber(point.y, 6)}</title></rect>) : <><path d={shade} fill="currentColor" opacity="0.2" /><path d={path} className="distribution-density" /></>}
     <text x="30" y="194" className="chart-label">{formatNumber(minX, 3)}</text><text x="390" y="194" textAnchor="end" className="chart-label">{formatNumber(maxX, 3)}</text>
   </svg>
 }

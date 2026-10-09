@@ -1,12 +1,14 @@
-import { useId, useMemo, useState, type FormEvent } from 'react'
+import { useId, useMemo, useRef, useState, type FormEvent } from 'react'
 import { EquationField } from './EquationField'
 import { compileGraph } from '../lib/math'
 import { areNotebookGraphBounds, defaultNotebookGraphBounds, type NotebookCell, type NotebookGraphBounds } from '../lib/notebook'
-import { notebookGraphPaths } from '../lib/notebookGraph'
+import { notebookGraphPaths, notebookInequalityRegion } from '../lib/notebookGraph'
+import { Graph3D } from './Graph3D'
 import type { ExpressionRow } from '../lib/project'
 import { evaluateSpreadsheet, spreadsheetColumns, spreadsheetSheets, type SpreadsheetData } from '../lib/spreadsheet'
 
-export function NotebookGraphCell({ cell, expressions, definitions, parameterA, onLink, onBounds, onExpressionChange, onCreateExpression, onToggleExpression }: {
+export function NotebookGraphCell({ darkMode = false, cell, expressions, definitions, parameterA, onLink, onBounds, onExpressionChange, onCreateExpression, onToggleExpression }: {
+  darkMode?: boolean
   cell: Extract<NotebookCell, { kind: 'graph' }>
   expressions: ExpressionRow[]
   definitions: Readonly<Record<string, number>>
@@ -18,10 +20,16 @@ export function NotebookGraphCell({ cell, expressions, definitions, parameterA, 
   onToggleExpression: (id: string, visible: boolean) => void
 }) {
   const row = expressions.find((item) => item.id === cell.expressionId)
+  const canvas = useRef<HTMLCanvasElement | null>(null)
+  const [show3d, setShow3d] = useState(false)
   const bounds = cell.bounds ?? defaultNotebookGraphBounds
   const preview = useMemo(() => {
     if (!row) return null
-    try { return { paths: notebookGraphPaths(compileGraph(row.text, definitions), bounds, parameterA) } }
+    try {
+      const graph = compileGraph(row.text, definitions)
+      const three = ['surface', 'implicitSurface', 'parametricSurface', 'spaceCurve'].includes(graph.kind)
+      return { graph, three, paths: three ? [] : notebookGraphPaths(graph, bounds, parameterA), shade: notebookInequalityRegion(graph, bounds, parameterA) }
+    }
     catch (error) { return { error: error instanceof Error ? error.message : 'Could not preview this expression.' } }
   }, [row, definitions, bounds, parameterA])
   const sx = (x: number) => (x - bounds.minX) / (bounds.maxX - bounds.minX) * 640
@@ -32,12 +40,17 @@ export function NotebookGraphCell({ cell, expressions, definitions, parameterA, 
     {row ? <>
       <div className="notebook-equation"><EquationField id={`graph-cell-${cell.id}`} label="Linked graph equation" placeholder="y = x^2" value={row.text} latex={row.latex} onChange={(text, latex) => onExpressionChange(row.id, text, latex)} /></div>
       <p className="notebook-hint">Editing this equation updates every view linked to it.</p>
-      <GraphBoundsEditor key={`${cell.id}:${JSON.stringify(bounds)}`} bounds={bounds} onChange={onBounds} />
-      {preview && 'error' in preview ? <p className="notebook-error" role="status">{preview.error}</p> : <>
+      {!(preview && 'three' in preview && preview.three) && <GraphBoundsEditor key={`${cell.id}:${JSON.stringify(bounds)}`} bounds={bounds} onChange={onBounds} />}
+      {preview && 'error' in preview ? <p className="notebook-error" role="status">{preview.error}</p> : preview?.three ? <>
+        <button type="button" className="notebook-action-button" onClick={() => setShow3d(value => !value)}>{show3d ? 'Hide' : 'Show'} 3D preview</button>
+        {show3d && <div className="notebook-3d-preview"><Graph3D preview graphs={[{ id:row.id, color:row.color, visible:true, graph:preview.graph }]} parameterA={parameterA} canvasRef={canvas} darkMode={darkMode} solids={[]} onSolidsChange={() => {}} vectorFields={[]} onVectorFieldsChange={() => {}} definitions={definitions} /></div>}
+        <p className="notebook-hint">Drag to rotate the sampled surface. The preview uses the workspace's default sampling region; small features may be missed.</p>
+      </> : <>
         <svg className="notebook-graph-preview" viewBox="0 0 640 280" role="img" aria-label={`Graph of ${row.text}, x from ${bounds.minX} to ${bounds.maxX}, y from ${bounds.minY} to ${bounds.maxY}`}>
+          {preview?.shade && <path d={preview.shade} fill="currentColor" opacity=".15" />}
           {bounds.minY <= 0 && bounds.maxY >= 0 && <path d={`M0,${sy(0)}H640`} className="notebook-graph-axis" />}
           {bounds.minX <= 0 && bounds.maxX >= 0 && <path d={`M${sx(0)},0V280`} className="notebook-graph-axis" />}
-          {preview?.paths?.map((path, index) => <path key={index} d={path} className="notebook-graph-line" />)}
+          {preview?.paths?.map((path, index) => <path key={index} d={path} className="notebook-graph-line" strokeDasharray={preview.graph.relation === '<' || preview.graph.relation === '>' ? '5 4' : undefined} />)}
           <text x="8" y="270" className="chart-label">{bounds.minX}</text><text x="632" y="270" textAnchor="end" className="chart-label">{bounds.maxX}</text>
         </svg>
         <p className="notebook-hint">Sampled preview{preview?.paths?.length === 0 ? ': no curve samples in this window' : ''}. Polar and parametric previews use 0 ≤ t, θ ≤ 2π; small features may be missed.</p>

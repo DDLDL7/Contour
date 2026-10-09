@@ -1,3 +1,4 @@
+import { AdditionalInference } from './AdditionalInference'
 import { useMemo, useState } from 'react'
 import { activeSpreadsheetSheet, evaluateSpreadsheet, fitRegression, spreadsheetColumns, spreadsheetRows, spreadsheetSheets, type RegressionKind, type SpreadsheetData } from '../lib/spreadsheet'
 import { formatNumber } from '../lib/math'
@@ -13,7 +14,8 @@ interface Props {
 
 export function SpreadsheetView({ data, definitions, parameterA, onChange }: Props) {
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
-  const [regressionKind, setRegressionKind] = useState<RegressionKind>('linear')
+  const regressionKind: RegressionKind = data.regressionKind ?? 'linear'
+  const polynomialDegree = data.polynomialDegree ?? 3
   const [chartKind, setChartKind] = useState<'scatter' | 'histogram' | 'bar' | 'box' | 'stem'>('scatter')
   const [dataColumn, setDataColumn] = useState('B')
   const sheets = spreadsheetSheets(data)
@@ -23,7 +25,7 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
   const points = useMemo(() => Array.from({ length: spreadsheetRows - 1 }, (_, index) => index + 2)
     .map((row) => ({ x: values[`A${row}`]?.value, y: values[`B${row}`]?.value }))
     .filter((point): point is { x: number; y: number } => Number.isFinite(point.x) && Number.isFinite(point.y)), [values])
-  const regression = useMemo(() => fitRegression(points, regressionKind), [points, regressionKind])
+  const regression = useMemo(() => fitRegression(points, regressionKind, polynomialDegree), [points, regressionKind, polynomialDegree])
   const chartPoints = points.length ? points.map((point) => ({ ...point, fittedY: regression?.predict(point.x) ?? point.y, residual: point.y - (regression?.predict(point.x) ?? point.y) })) : []
   const bounds = chartPoints.length ? {
     minX: Math.min(...chartPoints.map((point) => point.x)), maxX: Math.max(...chartPoints.map((point) => point.x)),
@@ -39,7 +41,8 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
     ? `y = ${formatNumber(regression.coefficients[1], 4)}x ${regression.coefficients[0] < 0 ? '−' : '+'} ${formatNumber(Math.abs(regression.coefficients[0]), 4)}`
     : regressionKind === 'exponential'
       ? `y = ${formatNumber(regression.coefficients[0], 4)}e^(${formatNumber(regression.coefficients[1], 4)}x)`
-      : `y = ${formatNumber(regression.coefficients[2], 4)}x² ${regression.coefficients[1] < 0 ? '−' : '+'} ${formatNumber(Math.abs(regression.coefficients[1]), 4)}x ${regression.coefficients[0] < 0 ? '−' : '+'} ${formatNumber(Math.abs(regression.coefficients[0]), 4)}` : ''
+      : regressionKind === 'polynomial' ? `u = (x − ${formatNumber(regression.xCenter, 8)}) / ${formatNumber(regression.xScale, 8)}; y ≈ ${regression.normalizedCoefficients.map((coefficient,power)=>`${formatNumber(coefficient,6)}${power ? `u^${power}` : ''}`).join(' + ')}`
+      : `y ≈ ${regression.coefficients.map((coefficient, power) => `${formatNumber(coefficient, 5)}${power ? `x^${power}` : ''}`).join(' + ')}` : ''
   const numericValues = Array.from({ length: spreadsheetRows - 1 }, (_, index) => index + 2)
     .map((row) => values[`${dataColumn}${row}`]?.value).filter((value): value is number => Number.isFinite(value))
   const sortedValues = [...numericValues].sort((a, b) => a - b)
@@ -134,7 +137,8 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
         <div className="spreadsheet-card-heading"><div><h3>{chartKind === 'scatter' ? 'Scatter plot' : chartKind === 'bar' ? 'Bar chart' : chartKind === 'histogram' ? 'Histogram' : chartKind === 'box' ? 'Box plot' : 'Stem-and-leaf'}</h3><p>{chartKind === 'scatter' || chartKind === 'bar' ? 'Columns A and B · rows 2–18' : `Column ${dataColumn} · rows 2–18`}</p></div><span>{chartKind === 'bar' ? barData.length : chartKind === 'scatter' ? points.length : numericValues.length} values</span></div>
         <div className="spreadsheet-chart-options"><label>Chart<select value={chartKind} onChange={(event) => setChartKind(event.target.value as typeof chartKind)}><option value="scatter">Scatter plot</option><option value="bar">Bar chart</option><option value="histogram">Histogram</option><option value="box">Box plot</option><option value="stem">Stem-and-leaf</option></select></label>{chartKind !== 'scatter' && chartKind !== 'bar' && <label>Values from<select value={dataColumn} onChange={(event) => setDataColumn(event.target.value)}>{spreadsheetColumns.map((column) => <option key={column} value={column}>Column {column}</option>)}</select></label>}</div>
         {chartKind !== 'scatter' ? <>{singleVariableChart}</> : <>
-        <label className="regression-picker">Regression model<select value={regressionKind} onChange={(event) => setRegressionKind(event.target.value as RegressionKind)}><option value="linear">Linear</option><option value="exponential">Exponential</option><option value="quadratic">Quadratic</option></select></label>
+        <label className="regression-picker">Regression model<select value={regressionKind} onChange={(event) => onChange({...data,regressionKind:event.target.value as RegressionKind})}><option value="linear">Linear</option><option value="exponential">Exponential</option><option value="quadratic">Quadratic</option><option value="polynomial">Polynomial</option></select></label>
+        {regressionKind === 'polynomial' && <label className="regression-picker">Degree (2–8)<input type="number" min="2" max="8" value={polynomialDegree} onChange={event => onChange({...data,polynomialDegree:Math.max(2,Math.min(8,Number(event.target.value) || 2))})} /></label>}
         {points.length < 2 ? <div className="spreadsheet-chart-empty">Enter at least two numeric x,y pairs in columns A and B.</div> : <svg className="spreadsheet-chart" viewBox="0 0 420 260" role="img" aria-label={`${regressionKind} regression scatter plot`}>
           <line x1="24" y1="236" x2="396" y2="236" className="chart-axis"/><line x1="24" y1="24" x2="24" y2="236" className="chart-axis"/>
           {regression && <polyline points={fitLinePoints} className="chart-fit" />}
@@ -153,6 +157,6 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
         </>}
       </section>
     </div>
-    <div className="spreadsheet-statistics"><ProbabilityCalculator /><InferenceTools values={numericCells} inferenceMode={data.inferenceMode} welch={data.welch} onModeChange={(inferenceMode) => onChange({ ...data, inferenceMode })} onWelchChange={(welch) => onChange({ ...data, welch })} /></div>
+    <div className="spreadsheet-statistics"><ProbabilityCalculator /><AdditionalInference values={numericCells} /><InferenceTools values={numericCells} inferenceMode={data.inferenceMode} welch={data.welch} onModeChange={(inferenceMode) => onChange({ ...data, inferenceMode })} onWelchChange={(welch) => onChange({ ...data, welch })} /></div>
   </div>
 }

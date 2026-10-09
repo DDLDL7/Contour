@@ -1,6 +1,6 @@
 import { compileScalarDefinition } from './math'
 
-export type GeometryTool = 'select' | 'point' | 'linked-point' | 'line' | 'segment' | 'ray' | 'vector' | 'polygon' | 'circle' | 'ellipse' | 'conic' | 'locus' | 'envelope' | 'distance' | 'angle' | 'perimeter' | 'area' | 'transform'
+export type GeometryTool = 'select' | 'point' | 'linked-point' | 'line' | 'segment' | 'ray' | 'vector' | 'polygon' | 'circle' | 'ellipse' | 'conic' | 'locus' | 'curve-locus' | 'envelope' | 'distance' | 'angle' | 'perimeter' | 'area' | 'transform'
 
 export interface GeometryPoint {
   id: string
@@ -12,6 +12,7 @@ export interface GeometryPoint {
   xCell?: string
   yCell?: string
   intersectionOf?: [string, string]
+  onPath?: { pathId: string; t: number }
   visible: boolean
 }
 
@@ -40,6 +41,17 @@ export function intersectGeometryPaths(first: GeometryPath, second: GeometryPath
   return { x: p.x + t * rx, y: p.y + t * ry }
 }
 
+export function projectPointToPath(path: GeometryPath, points: ReadonlyMap<string, GeometryPoint>, x: number, y: number) {
+  const start = points.get(path.startId); const end = points.get(path.endId)
+  if (!start || !end) return null
+  const dx=end.x-start.x, dy=end.y-start.y, norm=dx*dx+dy*dy
+  if (!Number.isFinite(norm) || norm < 1e-20) return null
+  let t=((x-start.x)*dx+(y-start.y)*dy)/norm
+  if (path.kind === 'ray') t=Math.max(0,t)
+  if (path.kind === 'segment' || path.kind === 'vector') t=Math.max(0,Math.min(1,t))
+  return { x:start.x+t*dx, y:start.y+t*dy, t }
+}
+
 export function resolveGeometryPoints(objects: readonly GeometryObject[], id: string, seen = new Set<string>()): GeometryPoint[] {
   if (seen.has(id)) return []
   seen.add(id)
@@ -57,6 +69,19 @@ export function resolveGeometryPoints(objects: readonly GeometryObject[], id: st
     if (object.operation === 'reflect-x') y = -y
     if (object.operation === 'reflect-y') x = -x
     if (object.operation === 'reflect-origin') { x = -x; y = -y }
+    if (object.operation === 'matrix' && object.matrix) {
+      const [a,b,c,d]=object.matrix
+      const nextX=a*x+b*y; y=c*x+d*y; x=nextX
+    }
+    if (object.operation === 'reflect-line') {
+      const line = objects.find((item): item is GeometryPath => item.id === object.reflectionLineId && ['line', 'segment', 'ray', 'vector'].includes(item.kind))
+      const start = line && points.get(line.startId); const end = line && points.get(line.endId)
+      if (!start || !end) return { ...point, x: Number.NaN, y: Number.NaN }
+      const dx = end.x - start.x; const dy = end.y - start.y; const length2 = dx * dx + dy * dy
+      if (length2 < 1e-20) return { ...point, x: Number.NaN, y: Number.NaN }
+      const t = ((x - start.x) * dx + (y - start.y) * dy) / length2
+      x = 2 * (start.x + t * dx) - x; y = 2 * (start.y + t * dy) - y
+    }
     if (object.operation === 'rotate') {
       const angle = object.angleDegrees * Math.PI / 180
       const dx = x - object.centerX; const dy = y - object.centerY
@@ -156,7 +181,7 @@ export interface GeometryMeasurement {
   visible: boolean
 }
 
-export type TransformOperation = 'translate' | 'reflect-x' | 'reflect-y' | 'reflect-origin' | 'rotate' | 'dilate' | 'invert'
+export type TransformOperation = 'translate' | 'reflect-x' | 'reflect-y' | 'reflect-origin' | 'reflect-line' | 'rotate' | 'dilate' | 'invert' | 'matrix'
 
 export interface GeometryTransform {
   id: string
@@ -164,6 +189,8 @@ export interface GeometryTransform {
   sourceId: string
   sourceKind: 'point' | 'line' | 'segment' | 'ray' | 'vector' | 'polygon'
   operation: TransformOperation
+  reflectionLineId?: string
+  matrix?: [number,number,number,number]
   dx: number
   dy: number
   centerX: number
@@ -175,7 +202,18 @@ export interface GeometryTransform {
   visible: boolean
 }
 
-export type GeometryObject = GeometryPoint | GeometryPath | GeometryPolygon | GeometryCircle | GeometryEllipse | GeometryConic | GeometryLocus | GeometryEnvelope | GeometryMeasurement | GeometryTransform
+export interface GeometryTangent { id: string; kind: 'tangent'; expressionId: string; x: number; color: string; visible: boolean }
+export interface GeometryCurveLocus { id:string; kind:'curve-locus'; xExpression:string; yExpression:string; start:number; end:number; color:string; visible:boolean }
+export type GeometryObject = GeometryPoint | GeometryPath | GeometryPolygon | GeometryCircle | GeometryEllipse | GeometryConic | GeometryLocus | GeometryEnvelope | GeometryMeasurement | GeometryTransform | GeometryTangent | GeometryCurveLocus
+
+export function sampleCurveLocus(object:GeometryCurveLocus, definitions:Readonly<Record<string,number>>={}): {x:number;y:number}[] {
+  const names=[...new Set(['t',...Object.keys(definitions)])]
+  const x=compileScalarDefinition(object.xExpression,names); const y=compileScalarDefinition(object.yExpression,names)
+  return Array.from({length:641},(_,index)=>{
+    const t=object.start+(object.end-object.start)*index/640
+    return {x:x.evaluate({...definitions,t}),y:y.evaluate({...definitions,t})}
+  })
+}
 
 /** Coefficients of Ax² + Bxy + Cy² + Dx + Ey + F = 0 through five points. */
 export function fitConic(points: Pick<GeometryPoint, 'x' | 'y'>[]): [number, number, number, number, number, number] | null {
@@ -215,7 +253,10 @@ export function isGeometryObject(value: unknown): value is GeometryObject {
   if (!value || typeof value !== 'object') return false
   const object = value as Partial<GeometryObject>
   if (typeof object.id !== 'string' || typeof object.color !== 'string' || typeof object.visible !== 'boolean') return false
+  if (object.kind === 'tangent') return typeof object.expressionId === 'string' && object.expressionId.length <= 80 && Number.isFinite(object.x)
+  if (object.kind === 'curve-locus') return [object.xExpression,object.yExpression].every(value=>typeof value==='string' && value.length>0 && value.length<=500) && Number.isFinite(object.start) && Number.isFinite(object.end) && object.start!<object.end!
   if (object.kind === 'point') {
+    if (object.onPath && (typeof object.onPath.pathId !== 'string' || !Number.isFinite(object.onPath.t))) return false
     const point = object as Partial<GeometryPoint>
     return Number.isFinite(point.x) && Number.isFinite(point.y) && typeof point.label === 'string'
       && (point.xCell === undefined || /^[A-H](?:[1-9]|1[0-8])$/.test(point.xCell))
@@ -263,7 +304,9 @@ export function isGeometryObject(value: unknown): value is GeometryObject {
     const transform = object as Partial<GeometryTransform>
     return typeof transform.sourceId === 'string'
       && ['point', 'line', 'segment', 'ray', 'vector', 'polygon'].includes(transform.sourceKind ?? '')
-      && ['translate', 'reflect-x', 'reflect-y', 'reflect-origin', 'rotate', 'dilate', 'invert'].includes(transform.operation ?? '')
+      && ['translate', 'reflect-x', 'reflect-y', 'reflect-origin', 'reflect-line', 'rotate', 'dilate', 'invert', 'matrix'].includes(transform.operation ?? '')
+      && (transform.operation!=='matrix' || Array.isArray(transform.matrix) && transform.matrix.length===4 && transform.matrix.every(Number.isFinite))
+      && (transform.operation !== 'reflect-line' || typeof transform.reflectionLineId === 'string')
       && [transform.dx, transform.dy, transform.centerX, transform.centerY, transform.angleDegrees, transform.scale, transform.radius].every(Number.isFinite)
   }
   return false
@@ -272,8 +315,27 @@ export function isGeometryObject(value: unknown): value is GeometryObject {
 export function geometryIsConsistent(objects: GeometryObject[]): boolean {
   const ids = new Set(objects.map((object) => object.id))
   if (ids.size !== objects.length) return false
+  const byId=new Map(objects.map(object=>[object.id,object]))
+  const visited=new Set<string>(); const visiting=new Set<string>()
+  function acyclic(id:string):boolean {
+    if (visiting.has(id)) return false
+    if (visited.has(id)) return true
+    const object=byId.get(id)
+    if (!object) return false
+    visiting.add(id)
+    if (!geometryDependencies(object).every(acyclic)) return false
+    visiting.delete(id); visited.add(id); return true
+  }
+  if (!objects.every(object=>acyclic(object.id))) return false
   return objects.every((object) => {
+    if (object.kind === 'tangent') return true // graph references resolve in the graph view
+    if (object.kind === 'curve-locus') return true
     if (object.kind === 'point') {
+      if (object.onPath) {
+        const path=objects.find((item): item is GeometryPath => item.id===object.onPath!.pathId && ['line','segment','ray','vector'].includes(item.kind))
+        if (!path || path.startId===object.id || path.endId===object.id) return false
+        if (((path.kind==='segment' || path.kind==='vector') && (object.onPath.t<0 || object.onPath.t>1)) || (path.kind==='ray' && object.onPath.t<0)) return false
+      }
       if (!object.intersectionOf) return true
       if (object.intersectionOf[0] === object.intersectionOf[1]) return false
       return object.intersectionOf.every((id) => objects.some((candidate) => candidate.id === id && ['line', 'ray', 'segment', 'vector'].includes(candidate.kind)))
@@ -294,6 +356,7 @@ export function geometryIsConsistent(objects: GeometryObject[]): boolean {
     if (object.kind === 'locus') return [object.pointId, object.centerId].every((id) => ids.has(id) && objects.some((candidate) => candidate.id === id && candidate.kind === 'point'))
     if (object.kind === 'envelope') return true
     if (object.kind === 'transform') {
+      if (object.operation === 'reflect-line' && !objects.some(item => item.id === object.reflectionLineId && ['line', 'segment', 'ray', 'vector'].includes(item.kind))) return false
       const source = objects.find((candidate) => candidate.id === object.sourceId)
       if (!source || source.kind === 'measurement') return false
       const sourceKind = source.kind === 'transform' ? source.sourceKind : source.kind
@@ -313,4 +376,26 @@ export function geometryIsConsistent(objects: GeometryObject[]): boolean {
       && objects.some((candidate) => candidate.id === object.startId && candidate.kind === 'point')
       && objects.some((candidate) => candidate.id === object.endId && candidate.kind === 'point')
   })
+}
+
+export function geometryDependencies(object: GeometryObject): string[] {
+  if (object.kind==='point') return object.intersectionOf ?? (object.onPath ? [object.onPath.pathId] : [])
+  if (object.kind==='line' || object.kind==='segment' || object.kind==='ray' || object.kind==='vector') return [object.startId,object.endId]
+  if (object.kind==='polygon' || object.kind==='conic') return object.pointIds
+  if (object.kind==='circle') return [object.centerId,object.radiusPointId]
+  if (object.kind==='ellipse') return [object.centerId,object.axisXId,object.axisYId]
+  if (object.kind==='locus') return [object.pointId,object.centerId]
+  if (object.kind==='transform') return [object.sourceId,...(object.operation==='reflect-line' ? [object.reflectionLineId!] : [])]
+  if (object.kind==='measurement') return object.pointIds ?? [object.polygonId!]
+  return []
+}
+
+export function removeGeometryObjects(objects: GeometryObject[], roots: string[]): GeometryObject[] {
+  const removed=new Set(roots)
+  let changed=true
+  while(changed) {
+    changed=false
+    for (const object of objects) if (!removed.has(object.id) && geometryDependencies(object).some(id=>removed.has(id))) { removed.add(object.id); changed=true }
+  }
+  return objects.filter(object=>!removed.has(object.id))
 }
