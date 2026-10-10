@@ -214,6 +214,8 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
 
   useEffect(() => {
     if (!containerRef.current) return
+    const initial = containerRef.current.getBoundingClientRect()
+    setSize({width:initial.width,height:initial.height})
     const observer = new ResizeObserver(([entry]) => {
       setSize({ width: entry.contentRect.width, height: entry.contentRect.height })
     })
@@ -670,6 +672,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         ctx.restore()
       }
     }
+    canvas.dataset.contourReady = 'true'
   }, [analysis.features, canvasRef, cursor, darkMode, geometryTool, graphs, parameterA, pendingVertices, piAxis, selectedPointId, size, trace, tracedGraph, tracedSlope, tracedY, viewport, visibleGeometry])
 
   function updateCursor(clientX: number, clientY: number) {
@@ -1009,6 +1012,7 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
     <div className="graph-stage" ref={containerRef}>
       <canvas
         ref={canvasRef}
+        data-contour-ready="false"
         className={`graph-canvas ${geometryTool === 'select' ? '' : 'geometry-cursor'}`}
         tabIndex={0}
         aria-label="Interactive two-dimensional graph. Drag to pan, scroll to zoom, or click a function to trace it."

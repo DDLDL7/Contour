@@ -8,6 +8,8 @@ import { replaceNotebookVariables, type NotebookCell, type NotebookOperation } f
 import type { ParameterRange, SliderParameter } from '../lib/parameters'
 import type { ExpressionRow } from '../lib/project'
 import { NotebookGraphCell, NotebookTableCell } from './NotebookLinks'
+import { ActivitySequence } from './ActivitySequence'
+import type { ActivityStep } from '../lib/notebook'
 import { NotebookAnswer } from './NotebookAnswer'
 import { activityTemplates, type ActivityTemplate } from '../lib/activities'
 import { activeSpreadsheetSheet, evaluateSpreadsheet, spreadsheetSheets, type SpreadsheetData } from '../lib/spreadsheet'
@@ -29,6 +31,7 @@ interface Props {
   onCreateExpression: (cellId: string) => void
   onSpreadsheetCellChange: (sheetId: string, address: string, raw: string) => void
   onAddActivity: (template: ActivityTemplate) => void
+  onRunSequence: (cellId:string, steps:ActivityStep[]) => void
 }
 
 function InlineMath({ latex }: { latex: string }) {
@@ -88,7 +91,7 @@ function NotebookParameterInput({ cell, parameters, onValueChange }: { cell: Ext
   </form>
 }
 
-export function NotebookView({ darkMode = false, cells, expressions, definitions, parameterA, parameterARange, parameters, spreadsheet, onChange, onToggleExpression, onParameterValueChange, onSetParameter, onExpressionChange, onCreateExpression, onSpreadsheetCellChange, onAddActivity }: Props) {
+export function NotebookView({ darkMode = false, cells, expressions, definitions, parameterA, parameterARange, parameters, spreadsheet, onChange, onToggleExpression, onParameterValueChange, onSetParameter, onExpressionChange, onCreateExpression, onSpreadsheetCellChange, onAddActivity, onRunSequence }: Props) {
   const values = useMemo(() => ({ a: parameterA, ...definitions }), [parameterA, definitions])
   const allParameters = useMemo(() => [{ name: 'a', value: parameterA, ...parameterARange }, ...parameters], [parameterA, parameterARange, parameters])
   const graphDefinitions = useMemo(() => ({ a: parameterA, ...definitions, ...Object.fromEntries(Object.entries(evaluateSpreadsheet(spreadsheet, definitions, parameterA)).flatMap(([address, value]) => value.value === null ? [] : [[address, value.value]])) }), [spreadsheet, definitions, parameterA])
@@ -98,6 +101,7 @@ export function NotebookView({ darkMode = false, cells, expressions, definitions
     if (atLimit) return
     const id = crypto.randomUUID()
     const next: NotebookCell = kind === 'text' ? { id, kind, content: '' }
+      : kind === 'sequence' ? {id,kind,label:'Reset activity',steps:[{action:'set-parameter',parameterName:'a',value:parameterA}]}
       : kind === 'answer' ? { id, kind, prompt: 'Write an equivalent expression.', expected: '(x+1)^2', response: '' }
       : kind === 'calculation' ? { id, kind, expression: '', operation: 'calculate' }
         : kind === 'visibility' ? { id, kind, label: 'Show graph', expressionId: expressions[0]?.id ?? '' }
@@ -122,7 +126,7 @@ export function NotebookView({ darkMode = false, cells, expressions, definitions
 
   return <div className="notebook-view">
     <div className="notebook-heading"><div><h2>Notebook</h2><p>Keep notes and calculations beside your graphs. Changes save with this project.</p></div></div>
-    <div className="notebook-templates" aria-label="Activity starters"><strong>Start an activity</strong>{activityTemplates.map((template) => <button type="button" className="notebook-action-button" key={template.id} disabled={cells.length + template.cells > 60 || (template.id === 'data' && spreadsheetSheets(spreadsheet).length >= 20)} onClick={() => onAddActivity(template.id)}>{template.label}</button>)}<p>Append linked examples and prompts to this notebook. Your existing work stays in place.</p></div>
+    <div className="notebook-templates"><label>Activity templates<select aria-label="Activity templates" value="" onChange={event=>{if(event.target.value)onAddActivity(event.target.value as ActivityTemplate)}}><option value="">Choose a template…</option>{activityTemplates.map(template=><option key={template.id} value={template.id} disabled={cells.length+template.cells>60 || (template.id==='data' && spreadsheetSheets(spreadsheet).length>=20)}>{template.label}{cells.length+template.cells>60?' — notebook full':''}</option>)}</select></label><p>Choose a template to append its linked examples, guided questions and prompts.</p></div>
     <div className="notebook-toolbar" aria-label="Add notebook cell">
       <button type="button" disabled={atLimit} onClick={() => add('text')}><FileText size={16} /> Add note</button>
       <button type="button" disabled={atLimit} onClick={() => add('answer')}>Add answer check</button>
@@ -131,15 +135,17 @@ export function NotebookView({ darkMode = false, cells, expressions, definitions
       <button type="button" disabled={atLimit} onClick={() => add('input')}><FormInput size={16} /> Add input box</button>
       <button type="button" disabled={atLimit} onClick={() => add('graph')}><LineChart size={16} /> Add graph</button>
       <button type="button" disabled={atLimit} onClick={() => add('table')}><Table2 size={16} /> Add table</button>
+      <button type="button" disabled={atLimit} onClick={() => add('sequence')}>Add action sequence</button>
       <button type="button" disabled={atLimit} onClick={() => add('action')}><Zap size={16} /> Add action button</button>
     </div>
     {cells.length === 0 && <div className="notebook-empty"><FileText size={28} /><strong>Your notebook is blank</strong><p>Add a note, a live calculation, or a control for a graph or parameter.</p><button type="button" onClick={() => add('text')}><Plus size={16} /> Add first note</button></div>}
     <div className="notebook-cells">{cells.map((cell, index) => <section className="notebook-cell" key={cell.id} aria-label={`${cell.kind} cell ${index + 1}`}>
-      <div className="notebook-cell-head"><span>{index + 1} · {cell.kind === 'answer' ? 'Answer check' : cell.kind === 'text' ? 'Note' : cell.kind === 'calculation' ? 'Calculation' : cell.kind === 'visibility' ? 'Graph checkbox' : cell.kind === 'input' ? 'Input box' : cell.kind === 'graph' ? 'Graph' : cell.kind === 'table' ? 'Table' : 'Action button'}</span><div>
+      <div className="notebook-cell-head"><span>{index + 1} · {cell.kind === 'sequence' ? 'Action sequence' : cell.kind === 'answer' ? 'Answer check' : cell.kind === 'text' ? 'Note' : cell.kind === 'calculation' ? 'Calculation' : cell.kind === 'visibility' ? 'Graph checkbox' : cell.kind === 'input' ? 'Input box' : cell.kind === 'graph' ? 'Graph' : cell.kind === 'table' ? 'Table' : 'Action button'}</span><div>
         <button type="button" aria-label={`Move cell ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={15} /></button>
         <button type="button" aria-label={`Move cell ${index + 1} down`} title="Move down" disabled={index === cells.length - 1} onClick={() => move(index, 1)}><ArrowDown size={15} /></button>
         <button type="button" aria-label={`Remove cell ${index + 1}`} title="Remove cell" onClick={() => onChange(cells.filter((item) => item.id !== cell.id))}><Trash2 size={15} /></button>
       </div></div>
+      {cell.kind === 'sequence' && <ActivitySequence cell={cell} expressions={expressions} parameters={allParameters} onChange={change=>update(cell.id,change)} onRun={steps=>onRunSequence(cell.id,steps)}/> }
       {cell.kind === 'answer' && <NotebookAnswer cell={cell} definitions={definitions} parameterA={parameterA} onChange={change => update(cell.id, change, true)} />}
       {cell.kind === 'text' && <><textarea aria-label={`Note ${index + 1}`} maxLength={4000} rows={4} placeholder="Write a note. Use {{a}} for a live variable or $x^2$ for maths." value={cell.content} onChange={(event) => update(cell.id, { content: event.target.value }, true)} />{cell.content.trim() && <NotebookText content={cell.content} values={values} />}</>}
       {cell.kind === 'calculation' && <><label className="notebook-operation">Method<select value={cell.operation} onChange={(event) => update(cell.id, { operation: event.target.value as NotebookOperation })}><option value="calculate">Calculate</option><option value="simplify">Simplify</option><option value="differentiate">Differentiate with respect to x</option></select></label><div className="notebook-equation"><EquationField id={`notebook-${cell.id}`} label={`Calculation ${index + 1} expression`} value={cell.expression} latex={cell.latex} placeholder="2a + 3" onChange={(expression, latex) => update(cell.id, { expression, latex }, true)} /></div><NotebookCalculation cell={cell} definitions={definitions} parameterA={parameterA} /></>}

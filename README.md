@@ -13,9 +13,9 @@ Contour is an offline-capable graphing calculator for students, built for the we
 - Construct and transform linked 2D geometry, including points, paths, polygons, circles, ellipses, measurements, and selected loci and envelopes.
 - Enter formulas on multiple spreadsheet sheets; link active-sheet cells to graphs, chart data, run regressions and supported statistical tests.
 - Explore supported 3D solids, vector fields, surface intersections, cross-sections, and printable nets.
-- Add offline notebook notes with inline LaTeX and live variables, calculations, editable linked graph/table cells, graph checkboxes, parameter inputs, and fixed action buttons. Append quadratic and data-model activity starters without replacing existing work.
+- Add offline notebook notes with inline LaTeX and live variables, calculations, editable linked graph/table cells, graph checkboxes, parameter inputs, and fixed action buttons. Choose from ten guided activity templates in one dropdown without replacing existing work. Author bounded action sequences as one undoable workspace edit.
 - Undo and redo project edits, including equation typing, title changes, slider moves, and adding or removing expressions.
-- Save work automatically on the device, export and import project files, and export graph images.
+- Save work automatically on the device, export and import project files, and export graph images as PNG, JPEG, WebP or SVG snapshots.
 - Use Maths tools for calculations, supported symbolic algebra and calculus, bounded numerical solving, matrix operations, statistics, regression, and an initial-value ODE estimate. Results display in mathematical notation where supported.
 - Use the packaged macOS app offline. The production web app caches its assets after an initial visit for later offline use.
 
@@ -86,7 +86,7 @@ npm run build
 
 ### Notebook activity authoring
 
-In **Notebook**, choose **Explore a quadratic** or **Build a data model** to append an activity to your current project. Each insertion is one undoable edit. You can edit the prompts, change linked equations, create a new equation from a graph cell, and apply a saved preview window. Previews support explicit functions, vertical lines, polar and parametric curves, implicit contours and shaded inequalities. Polar/parametric sampling uses 0–2π. Supported 3D graphs have an on-demand interactive preview. Sampling may miss small features. Answer-check cells save a prompt, expected expression and response, then run a symbolic equivalence check when requested.
+In **Notebook**, use the **Activity templates** dropdown to append one of ten guided activities to your current project. The list includes quadratic exploration, data modelling, slope/intercept, trigonometry, limits, derivatives, integration, inequalities, parametric curves and 3D surfaces. Each insertion is one undoable edit. You can edit the prompts, change linked equations, create a new equation from a graph cell, and apply a saved preview window. Previews support explicit functions, vertical lines, polar and parametric curves, implicit contours and shaded inequalities. Polar/parametric sampling uses 0–2π. Supported 3D graphs have an on-demand interactive preview. Sampling may miss small features. Answer-check cells save a prompt, expected expression and response, then run a symbolic equivalence check when requested.
 
 Table cells link to a saved sheet. Enable **Edit linked cells** to enter raw values or formulas, then disable editing to read evaluated values. All eight spreadsheet columns are available, with a saved visible range of 1–18 rows. Formula errors are shown per cell. Editing a non-active sheet preserves which sheet supplies cell-address values to graphs. Notebook links, graph windows, table ranges and starter content survive autosave and project-file export/reopen.
 
@@ -95,3 +95,12 @@ Table cells link to a saved sheet. Enable **Edit linked cells** to enter raw val
 In **Spreadsheet & Stats**, select **Welch two-sample test / interval**, choose two different sample columns, and enter the null mean difference, alternative and confidence level. Rows 2–18 supply finite numeric observations independently from each column; blanks and non-numeric cells are omitted. Results show sample summaries, mean difference, standard error, fractional degrees of freedom, p-value and a two-sided confidence interval. The interval remains two-sided even when the test alternative is one-sided.
 
 The selected procedure and Welch inputs save with the project; click **Calculate** after reopening to recompute results. Changes to the data or inputs hide stale results. These procedures assume independent samples and approximately normal populations for small samples. Choose the separate paired-t procedure for matched observations. Welch does not check normality or identify outliers. Both constant samples are rejected. Formulas follow [NIST’s two-sample test](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm) and [mean-difference confidence limits](https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/diffmean.htm). Student-t critical values use a bounded expanding numerical search; unsupported extreme quantiles report an error instead of being capped at ±64.
+
+
+### Activity sequences and exports
+
+Add an **action sequence** to run up to twenty ordered parameter-setting or graph show/hide steps. Author each step using the controls; imported text is never executed. All targets and parameter ranges are checked before any edit is applied. The sequence runs only when its button is pressed, and one Undo restores the previous workspace.
+
+Open **Export** in the header. Graph workspaces offer PNG, JPEG, WebP and SVG snapshots; JPEG uses white behind transparent pixels. SVG snapshots embed the rendered image. Browser support for WebP varies and unsupported encoding reports an error.
+
+Notebook documents export as standalone HTML or Markdown, or through **Print / PDF**. Expected answers are omitted unless **Include expected answers** is selected. Exported worksheets contain current variable values, tables, calculations and sampled 2D graph previews; they are static, and interactive controls remain in the JSON project file. 3D formulas and a project-viewing note are included. Inline LaTeX is retained as source notation. When printing is unavailable, export HTML and open it in a browser to print or save as PDF.

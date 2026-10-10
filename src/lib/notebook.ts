@@ -1,7 +1,20 @@
+export type ActivityStep =
+  | { action:'set-parameter'; parameterName:string; value:number }
+  | { action:'set-visibility'; expressionId:string; visible:boolean }
+
+export function areActivitySteps(value:unknown): value is ActivityStep[] {
+  return Array.isArray(value) && value.length>=1 && value.length<=20 && value.every(step=>{
+    if(!step || typeof step!=='object')return false
+    return step.action==='set-parameter' ? typeof step.parameterName==='string' && /^[a-z]$/.test(step.parameterName) && typeof step.value==='number' && Number.isFinite(step.value)
+      : step.action==='set-visibility' && typeof step.expressionId==='string' && /^[\w-]{0,80}$/.test(step.expressionId) && typeof step.visible==='boolean'
+  })
+}
+
 export type NotebookOperation = 'calculate' | 'simplify' | 'differentiate'
 
 export type NotebookCell =
   | { id: string; kind: 'text'; content: string }
+  | { id:string; kind:'sequence'; label:string; steps:ActivityStep[] }
   | { id: string; kind: 'answer'; prompt: string; expected: string; response: string }
   | { id: string; kind: 'calculation'; expression: string; latex?: string; operation: NotebookOperation }
   | { id: string; kind: 'visibility'; label: string; expressionId: string }
@@ -18,6 +31,7 @@ export function areNotebookCells(value: unknown): value is NotebookCell[] {
     const item = cell as Partial<NotebookCell>
     if (typeof item.id !== 'string' || !/^[\w-]{1,80}$/.test(item.id) || ids.has(item.id)) return false
     ids.add(item.id)
+    if (item.kind === 'sequence') return typeof item.label==='string' && item.label.length<=120 && areActivitySteps(item.steps)
     if (item.kind === 'text') return typeof item.content === 'string' && item.content.length <= 4000
     if (item.kind === 'answer') return typeof item.prompt === 'string' && item.prompt.length <= 4000
       && typeof item.expected === 'string' && item.expected.length <= 1000 && typeof item.response === 'string' && item.response.length <= 1000

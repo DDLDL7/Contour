@@ -334,9 +334,23 @@ These entries complete the defined offline operation families; they do not asser
 
 ## Remaining work toward the full product
 
-1. **Non-mathematical authoring:** richer lesson content/template library, document exports and a deliberately specified isolated scripting system. Existing fixed action buttons never execute imported code. Mathematical answer checking and broader graph previews are now implemented.
+1. **Authoring extensions:** the offline authoring increment below implements guided templates, worksheet exports and bounded declarative action sequences. A broader curriculum library, formatted publication-quality mathematics and unrestricted sandboxed programming remain separate extensions. Existing controls never execute imported code.
 2. **Validation and release:** broader browser/hardware coverage, student usability sessions, accessibility/performance audits, numerical/reference coverage and Mac signing/notarisation. Representative tests do not prove every mathematical input correct.
 3. **Online platform — excluded from this request:** accounts/permissions, syncing/conflicts, collaborative editing, teacher assignments/progress and moderated searchable resource publishing. Offline projects remain account-free.
 4. **Separate later capabilities:** optional no-paid-API local assistant, mobile/AR applications and platform-specific distribution work.
 
 No online feature is added by this increment. The phase table remains a full-product roadmap: implemented offline operation families do not make classroom, library or release phases complete.
+
+
+## 10 October 2026 — activity authoring and export formats
+
+- **One template picker:** Notebook shows a single **Activity templates** dropdown, containing all ten templates: quadratic exploration, data modelling, slope/intercept, amplitude/period, removable discontinuities, derivatives/turning points, antiderivatives/area, inequalities, parametric circles and 3D surfaces. Selecting a template appends linked examples and editable learning goals, investigations, answer checks and reflection prompts. Existing work stays intact; insertion is one undoable edit, with notebook/sheet capacity checks.
+- **Bounded activity scripts:** action sequences expose ordered parameter-setting and graph show/hide steps through ordinary authoring controls. At most twenty steps run, only on an explicit button press. Every reference and range is checked before the workspace changes; successful execution is one undoable edit. Opening an imported project never runs a sequence. This implements a declarative script contract, not arbitrary Python or JavaScript execution.
+- **Graph export:** the Export menu offers PNG, JPEG, WebP and SVG snapshots. JPEG flattens transparent pixels onto white; unsupported browser encodings report an error instead of producing a mislabelled file. SVG is an image snapshot, not an editable vector reconstruction. Graph export waits for a painted canvas instead of silently downloading a blank default canvas.
+- **Notebook export:** standalone HTML worksheets, Markdown and browser Print / PDF. Expected answers are excluded by default and can be included explicitly. Exports use current saved variable values, recalculated tables/calculations and sampled 2D SVG graph previews. Interactive controls remain in the project; 3D formulas are included with guidance to open the project. Inline LaTeX remains source notation. If printing/popups are unavailable, the interface directs the user to export HTML and print from a browser.
+
+These features advance offline phase 7. Online publishing, assignments and shared template libraries remain excluded. Mac signing/notarisation and broader release validation remain outstanding.
+
+Validation for this authoring increment: 156 tests across 30 files pass, including all template round trips, atomic sequence execution/rejection, export escaping/answer omission, image encoding/fallback handling and unpainted-canvas rejection. Production web build and packaged Mac build pass with existing bundle warnings. Template insertion and HTML download were checked in Chrome. Final mobile/sequence rendering, print-dialog behaviour and the updated painted-image path remain visually unverified because native UI automation lost access to the browser window.
+
+Finishing interface review returned `disposition: ship`, with both numeric-draft editing and initial 3D canvas readiness resolved from source. The final suite was run with two workers after the build: an earlier concurrent run exceeded the symbolic test’s five-second timeout and caused cascading shared-runtime failures. Visual checks listed above remain unverified.

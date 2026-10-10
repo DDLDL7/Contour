@@ -12,7 +12,8 @@ import { compileScalarDefinition, formatNumber, type GraphExpression, type Plott
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
 import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
 import { compileWorkspace } from './lib/workspace'
-import { appendActivity } from './lib/activities'
+import { ExportMenu } from './components/ExportMenu'
+import { appendActivity, runActivitySteps } from './lib/activities'
 import { evaluateSpreadsheet, updateSpreadsheetCell } from './lib/spreadsheet'
 import { defaultParameterRange, nextParameterName, unusedParameterNames, type SliderParameter } from './lib/parameters'
 
@@ -256,16 +257,6 @@ function App() {
     }
   }
 
-  function exportImage() {
-    const canvas = graphCanvasRef.current
-    if (!canvas) return
-    const anchor = document.createElement('a')
-    anchor.download = `contour-${view}-graph.png`
-    anchor.href = canvas.toDataURL('image/png')
-    anchor.click()
-    setMessage('Graph image downloaded.')
-  }
-
   function newProject() {
     if (!window.confirm('Start a new project? Export a copy first if you want to keep this one.')) return
     setAnimationStop((current) => current + 1)
@@ -290,7 +281,7 @@ function App() {
         <div className="header-actions">
           {(view === '2d' || view === '3d') && <button className="header-button split-button" type="button" aria-pressed={splitView} onClick={() => setSplitView((value) => !value)} title="Show 2D and 3D graphs together"><Columns2 size={16} /><span>Split View</span></button>}
           <button className="header-button help-button" type="button" onClick={() => setHelpOpen(true)} aria-label="Help & Shortcuts" title="Help & Shortcuts"><HelpCircle size={16} /><span>Help & Shortcuts</span></button>
-          {(view === '2d' || view === '3d') && <button className="icon-button header-icon" type="button" onClick={exportImage} aria-label="Export graph image" title="Export graph image"><Download size={17} /></button>}
+          <ExportMenu project={project} view={view} canvasRef={graphCanvasRef} onMessage={setMessage}/>
           <button className="icon-button header-icon" type="button" onClick={() => fileInputRef.current?.click()} aria-label="Open project" title="Open project"><Upload size={17} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => downloadProject(project)} aria-label="Save project" title="Save project"><Download size={17} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button>
@@ -393,7 +384,7 @@ function App() {
           <div className={`graph-wrap ${splitView && (view === '2d' || view === '3d') ? 'is-split' : ''}`}>
             <div className="primary-workspace">
             {view === 'sheet' ? <SpreadsheetView data={project.spreadsheet} definitions={definitions} parameterA={project.parameterA} onChange={(spreadsheet) => setProject((current) => ({ ...current, spreadsheet }))} />
-              : view === 'notebook' ? <NotebookView darkMode={theme === 'dark'} cells={project.notebook} expressions={project.expressions} definitions={definitions} parameterA={project.parameterA} parameterARange={project.parameterARange} parameters={project.parameters} spreadsheet={project.spreadsheet} onChange={(notebook, group) => setProject((current) => ({ ...current, notebook }), group)} onExpressionChange={(id, text, latex) => updateRow(id, { text, latex })} onCreateExpression={createNotebookExpression} onSpreadsheetCellChange={updateNotebookSpreadsheetCell} onAddActivity={(template) => setProject((current) => appendActivity(current, template))} onToggleExpression={(id, visible) => updateRow(id, { visible })} onParameterValueChange={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => name === 'a' ? { ...current, parameterA: value } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value } : item) }) }} onSetParameter={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => { const parameter = name === 'a' ? { name, ...current.parameterARange } : current.parameters.find((item) => item.name === name); if (!parameter) return current; const bounded = Math.max(parameter.min, Math.min(parameter.max, value)); return name === 'a' ? { ...current, parameterA: bounded } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value: bounded } : item) } }) }} />
+              : view === 'notebook' ? <NotebookView darkMode={theme === 'dark'} cells={project.notebook} expressions={project.expressions} definitions={definitions} parameterA={project.parameterA} parameterARange={project.parameterARange} parameters={project.parameters} spreadsheet={project.spreadsheet} onChange={(notebook, group) => setProject((current) => ({ ...current, notebook }), group)} onExpressionChange={(id, text, latex) => updateRow(id, { text, latex })} onCreateExpression={createNotebookExpression} onSpreadsheetCellChange={updateNotebookSpreadsheetCell} onAddActivity={(template) => setProject((current) => appendActivity(current, template))} onRunSequence={(cellId,steps)=>{ runActivitySteps(project,steps); setAnimationStop(current=>current+1); setProject(current=>runActivitySteps({ ...current, notebook:current.notebook.map(cell=>cell.id===cellId && cell.kind==='sequence' ? { ...cell,steps } : cell) },steps)) }} onToggleExpression={(id, visible) => updateRow(id, { visible })} onParameterValueChange={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => name === 'a' ? { ...current, parameterA: value } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value } : item) }) }} onSetParameter={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => { const parameter = name === 'a' ? { name, ...current.parameterARange } : current.parameters.find((item) => item.name === name); if (!parameter) return current; const bounded = Math.max(parameter.min, Math.min(parameter.max, value)); return name === 'a' ? { ...current, parameterA: bounded } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value: bounded } : item) } }) }} />
               : view === '2d'
               ? <Graph2D graphs={graphs} geometry={project.geometry} onGeometryChange={(geometry) => setProject((current) => ({ ...current, geometry }))} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} linkedValues={sheetLinks} />
               : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} solids={project.solids} onSolidsChange={(solids) => setProject((current) => ({ ...current, solids }))} vectorFields={project.vectorFields} onVectorFieldsChange={(vectorFields) => setProject((current) => ({ ...current, vectorFields }))} definitions={definitions} />

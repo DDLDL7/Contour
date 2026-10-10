@@ -190,13 +190,15 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     const surfaces = new THREE.Group()
     scene.add(surfaces)
 
-    const render = () => renderer.render(scene, sceneRef.current?.camera ?? camera)
+    let rendererSized = false
+    const render = () => { renderer.render(scene, sceneRef.current?.camera ?? camera); if(rendererSized)canvas.dataset.contourReady='true' }
     controls.addEventListener('change', render)
-    const observer = new ResizeObserver(() => {
+    const resize = () => {
       const width = container.clientWidth
       const height = container.clientHeight
       if (width === 0 || height === 0) return
       renderer.setSize(width, height, false)
+      rendererSized = true
       camera.aspect = width / height
       camera.updateProjectionMatrix()
       orthographicCamera.left = -10 * width / height
@@ -205,10 +207,11 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
       orthographicCamera.bottom = -10
       orthographicCamera.updateProjectionMatrix()
       render()
-    })
+    }
+    const observer = new ResizeObserver(resize)
     observer.observe(container)
     sceneRef.current = { renderer, scene, camera, perspectiveCamera: camera, orthographicCamera, controls, surfaces, grid }
-    render()
+    resize()
 
     return () => {
       observer.disconnect()
@@ -476,7 +479,7 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
 
   return (
     <div className="graph-stage" ref={containerRef}>
-      {error ? <div className="graph-error">{error}</div> : <canvas ref={canvasRef} className="graph-canvas" aria-label="Interactive three-dimensional graph. Drag to rotate and scroll to zoom." role="img" />}
+      {error ? <div className="graph-error">{error}</div> : <canvas data-contour-ready="false" ref={canvasRef} className="graph-canvas" aria-label="Interactive three-dimensional graph. Drag to rotate and scroll to zoom." role="img" />}
       {!error && !preview && (
         <>
           <div className="graph-controls graph-controls-3d" aria-label="3D graph controls">
