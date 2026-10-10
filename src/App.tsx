@@ -2,7 +2,7 @@ import { OfflineStatus } from './components/OfflineStatus'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpenText, Box, Calculator, ChartNoAxesCombined, Copy, Download, Eye, EyeOff, HelpCircle, Moon, Plus, Redo2, RotateCcw, Sun, TableProperties, Trash2, Undo2, Upload, PanelLeftClose, PanelLeftOpen, Columns2, Sigma, Search, X } from 'lucide-react'
 import { Graph2D } from './components/Graph2D'
-import { Graph3D } from './components/Graph3D'
+import { Graph3D } from './components/Graph3DLoader'
 import { EquationField } from './components/EquationField'
 import { MathTools } from './components/MathTools'
 import { SpreadsheetView } from './components/SpreadsheetView'
@@ -10,7 +10,8 @@ import { ParameterControl } from './components/ParameterControl'
 import { NotebookView } from './components/NotebookView'
 import { compileScalarDefinition, formatNumber, type GraphExpression, type PlottableGraph } from './lib/math'
 import { createHistory, recordHistory, redoHistory, undoHistory } from './lib/history'
-import { downloadProject, graphColors, loadProject, parseProjectFile, saveProject, starterProject, type Project } from './lib/project'
+import { downloadProject, graphColors, loadProjectState, parseProjectFile, preserveStoredProject, saveProject, starterProject, storedProjectData, type Project } from './lib/project'
+import { downloadBlob } from './lib/export'
 import { compileWorkspace } from './lib/workspace'
 import { ExportMenu } from './components/ExportMenu'
 import { appendActivity, runActivitySteps } from './lib/activities'
@@ -44,7 +45,9 @@ function vectorFieldError(parts: { fx: string; fy: string; fz: string }, definit
 }
 
 function App() {
-  const [history, setHistory] = useState(() => createHistory(loadProject()))
+  const [startup] = useState(loadProjectState)
+  const [recoveryWarning, setRecoveryWarning] = useState(startup.warning)
+  const [history, setHistory] = useState(() => createHistory(startup.project))
   const project = history.present
   const [view, setView] = useState<View>('2d')
   const [railOpen, setRailOpen] = useState(true)
@@ -60,9 +63,27 @@ function App() {
   const [message, setMessage] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const helpRef = useRef<HTMLElement>(null)
+  const helpTriggerRef = useRef<HTMLButtonElement>(null)
   const graphCanvasRef = useRef<HTMLCanvasElement>(null)
   const secondaryCanvasRef = useRef<HTMLCanvasElement>(null)
   const lastSavedAtRef = useRef(Date.now())
+
+  useEffect(() => {
+    if (!helpOpen) return
+    const dialog = helpRef.current
+    dialog?.querySelector<HTMLButtonElement>('button')?.focus()
+    function handleDialogKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); setHelpOpen(false); return }
+      if (event.key !== 'Tab' || !dialog) return
+      const controls = [...dialog.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex="0"]')]
+      const first = controls[0]; const last = controls.at(-1)
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+    }
+    document.addEventListener('keydown', handleDialogKey)
+    return () => { document.removeEventListener('keydown', handleDialogKey); helpTriggerRef.current?.focus() }
+  }, [helpOpen])
 
   useEffect(() => {
     try { localStorage.setItem('contour-theme', theme) } catch { /* Theme still applies for this session. */ }
@@ -109,6 +130,7 @@ function App() {
     : view === '3d' && (project.solids.some((object) => object.visible) || project.vectorFields.some((object) => object.visible))
 
   useEffect(() => {
+    if (recoveryWarning) { setSaveStatus('Autosave paused for recovery'); return }
     setSaveStatus('Saving…')
     const delay = Math.min(250, Math.max(0, 2000 - (Date.now() - lastSavedAtRef.current)))
     const timeout = window.setTimeout(() => {
@@ -121,10 +143,11 @@ function App() {
       }
     }, delay)
     return () => window.clearTimeout(timeout)
-  }, [project])
+  }, [project, recoveryWarning])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (helpOpen) return
       if ((event.metaKey || event.ctrlKey) && !event.altKey && /^[1-5]$/.test(event.key)) {
         event.preventDefault()
         setView((['2d', '3d', 'tools', 'sheet', 'notebook'] as View[])[Number(event.key) - 1])
@@ -154,7 +177,7 @@ function App() {
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [project])
+  }, [project, helpOpen])
 
   function updateRow(id: string, changes: Partial<Project['expressions'][number]>) {
     setProject((current) => {
@@ -249,6 +272,8 @@ function App() {
     try {
       const content = await file.text()
       const imported = parseProjectFile(content)
+      preserveStoredProject()
+      setRecoveryWarning('')
       setAnimationStop((current) => current + 1)
       setProject(imported)
       setMessage(`Opened ${file.name}.`)
@@ -259,6 +284,8 @@ function App() {
 
   function newProject() {
     if (!window.confirm('Start a new project? Export a copy first if you want to keep this one.')) return
+    try { preserveStoredProject() } catch { setMessage('Could not preserve the stored data. Export stored data first.'); return }
+    setRecoveryWarning('')
     setAnimationStop((current) => current + 1)
     setProject(starterProject())
     setMessage('New project started.')
@@ -266,7 +293,7 @@ function App() {
 
   return (
     <div className="app-shell" data-theme={theme}>
-      <header className="app-header">
+      <header className="app-header" inert={helpOpen}>
         <div className="header-identity">
           {(view === '2d' || view === '3d') && <button className="icon-button rail-toggle" type="button" onClick={() => setRailOpen((open) => !open)} aria-label={railOpen ? 'Hide expression rail' : 'Show expression rail'} title={railOpen ? 'Hide expression rail' : 'Show expression rail'}>{railOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button>}
           <div className="brand" aria-label="Contour home"><img className="brand-mark" src="/contour-app-icon.png" alt="" /><span className="brand-name">CONTOUR</span></div>
@@ -275,12 +302,19 @@ function App() {
           <span className="save-status"><span className="status-dot" />{saveStatus}</span>
           <div className="header-history"><button className="icon-button" type="button" onClick={() => { setAnimationStop((current) => current + 1); setHistory(undoHistory) }} aria-label="Undo" title="Undo (⌘Z)" disabled={history.past.length === 0}><Undo2 size={17} /></button><button className="icon-button" type="button" onClick={() => { setAnimationStop((current) => current + 1); setHistory(redoHistory) }} aria-label="Redo" title="Redo (⌘⇧Z)" disabled={history.future.length === 0}><Redo2 size={17} /></button></div>
         </div>
-        <nav className="view-switch" role="tablist" aria-label="Workspace view">
-          {([['2d', '2D Graph', ChartNoAxesCombined], ['3d', '3D Graph', Box], ['tools', 'Maths Tools', Calculator], ['sheet', 'Spreadsheet & Stats', TableProperties], ['notebook', 'Notebook', BookOpenText]] as const).map(([id, label, Icon], index) => <button key={id} type="button" role="tab" aria-label={label} aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)} title={`${label} (⌘${index + 1})`}><Icon size={15} className="nav-icon" /><span>{label}</span><kbd>⌘{index + 1}</kbd></button>)}
+        <nav className="view-switch" role="tablist" aria-label="Workspace view" onKeyDown={event => {
+          const tabs = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+          const index = tabs.indexOf(event.target as HTMLButtonElement)
+          if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+          event.preventDefault()
+          const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+          tabs[next].click(); tabs[next].focus(); tabs[next].scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+        }}>
+          {([['2d', '2D Graph', ChartNoAxesCombined], ['3d', '3D Graph', Box], ['tools', 'Maths Tools', Calculator], ['sheet', 'Spreadsheet & Stats', TableProperties], ['notebook', 'Notebook', BookOpenText]] as const).map(([id, label, Icon], index) => <button key={id} id={`view-${id}`} type="button" role="tab" tabIndex={view === id ? 0 : -1} aria-controls="workspace-panel" aria-label={label} aria-selected={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)} title={`${label} (⌘${index + 1})`}><Icon size={15} className="nav-icon" /><span>{label}</span><kbd>⌘{index + 1}</kbd></button>)}
         </nav>
         <div className="header-actions">
           {(view === '2d' || view === '3d') && <button className="header-button split-button" type="button" aria-pressed={splitView} onClick={() => setSplitView((value) => !value)} title="Show 2D and 3D graphs together"><Columns2 size={16} /><span>Split View</span></button>}
-          <button className="header-button help-button" type="button" onClick={() => setHelpOpen(true)} aria-label="Help & Shortcuts" title="Help & Shortcuts"><HelpCircle size={16} /><span>Help & Shortcuts</span></button>
+          <button ref={helpTriggerRef} className="header-button help-button" type="button" onClick={() => setHelpOpen(true)} aria-label="Help & Shortcuts" title="Help & Shortcuts"><HelpCircle size={16} /><span>Help & Shortcuts</span></button>
           <ExportMenu project={project} view={view} canvasRef={graphCanvasRef} onMessage={setMessage}/>
           <button className="icon-button header-icon" type="button" onClick={() => fileInputRef.current?.click()} aria-label="Open project" title="Open project"><Upload size={17} /></button>
           <button className="icon-button header-icon" type="button" onClick={() => downloadProject(project)} aria-label="Save project" title="Save project"><Download size={17} /></button>
@@ -288,7 +322,13 @@ function App() {
         </div>
       </header>
 
-      <main className={`workspace view-${view} ${railOpen ? '' : 'rail-hidden'}`}>
+      {recoveryWarning && <section className="recovery-notice" role="alert" inert={helpOpen}>
+        <p>{recoveryWarning}</p>
+        <button type="button" onClick={() => { try { downloadBlob(new Blob([storedProjectData()], { type: 'application/json' }), 'contour-stored-data.json') } catch { setMessage('Could not export stored data from this device.') } }}>Export stored data</button>
+        <button type="button" onClick={() => { try { preserveStoredProject(); setRecoveryWarning('') } catch { setMessage('Could not preserve the stored data. Export stored data first.') } }}>Keep this workspace</button>
+      </section>}
+
+      <main className={`workspace view-${view} ${railOpen ? '' : 'rail-hidden'}`} inert={helpOpen}>
         <aside className="project-rail" aria-label="Expression rail">
           <div className="rail-heading"><span><Sigma size={16} /> Expressions</span><button type="button" onClick={addExpression} aria-label="Add expression" title="Add expression"><Plus size={17} /></button></div>
           <div className="rail-items">{compiledRows.length === 0 ? <p className="rail-empty">No expressions yet</p> : compiledRows.map((row, index) => <button key={row.id} type="button" className={`rail-item ${row.error ? 'rail-error' : ''}`} onClick={() => { setExpressionFilter(''); document.querySelector(`math-field[data-expression-id="${CSS.escape(row.id)}"]`)?.scrollIntoView({ block: 'center' }) }} title={row.text || `Expression ${index + 1}`}><span className="rail-index">{index + 1}</span><span className="rail-swatch" style={{ backgroundColor: row.color }} /><span className="rail-text">{row.text || 'Empty expression'}</span>{row.error ? <span className="rail-state">!</span> : row.graph ? <Eye size={14} /> : null}</button>)}</div>
@@ -382,7 +422,7 @@ function App() {
 
         <section className="visual-panel" aria-label="Graph view">
           <div className={`graph-wrap ${splitView && (view === '2d' || view === '3d') ? 'is-split' : ''}`}>
-            <div className="primary-workspace">
+            <div className="primary-workspace" id="workspace-panel" role="tabpanel" aria-labelledby={`view-${view}`}>
             {view === 'sheet' ? <SpreadsheetView data={project.spreadsheet} definitions={definitions} parameterA={project.parameterA} onChange={(spreadsheet) => setProject((current) => ({ ...current, spreadsheet }))} />
               : view === 'notebook' ? <NotebookView darkMode={theme === 'dark'} cells={project.notebook} expressions={project.expressions} definitions={definitions} parameterA={project.parameterA} parameterARange={project.parameterARange} parameters={project.parameters} spreadsheet={project.spreadsheet} onChange={(notebook, group) => setProject((current) => ({ ...current, notebook }), group)} onExpressionChange={(id, text, latex) => updateRow(id, { text, latex })} onCreateExpression={createNotebookExpression} onSpreadsheetCellChange={updateNotebookSpreadsheetCell} onAddActivity={(template) => setProject((current) => appendActivity(current, template))} onRunSequence={(cellId,steps)=>{ runActivitySteps(project,steps); setAnimationStop(current=>current+1); setProject(current=>runActivitySteps({ ...current, notebook:current.notebook.map(cell=>cell.id===cellId && cell.kind==='sequence' ? { ...cell,steps } : cell) },steps)) }} onToggleExpression={(id, visible) => updateRow(id, { visible })} onParameterValueChange={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => name === 'a' ? { ...current, parameterA: value } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value } : item) }) }} onSetParameter={(name, value) => { setAnimationStop((current) => current + 1); setProject((current) => { const parameter = name === 'a' ? { name, ...current.parameterARange } : current.parameters.find((item) => item.name === name); if (!parameter) return current; const bounded = Math.max(parameter.min, Math.min(parameter.max, value)); return name === 'a' ? { ...current, parameterA: bounded } : { ...current, parameters: current.parameters.map((item) => item.name === name ? { ...item, value: bounded } : item) } }) }} />
               : view === '2d'
@@ -410,7 +450,7 @@ function App() {
 
       {helpOpen && (
         <div className="dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setHelpOpen(false) }}>
-          <section className="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
+          <section ref={helpRef} className="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
             <button className="dialog-close" type="button" onClick={() => setHelpOpen(false)} aria-label="Close help">×</button>
             <div className="help-icon"><HelpCircle size={22} /></div>
             <h2 id="help-title">Graphing with Contour</h2>

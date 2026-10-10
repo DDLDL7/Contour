@@ -1,6 +1,6 @@
 # Release testing — 10 October 2026
 
-This is the first release testing pass after the activity-authoring and export increment (`d3b2449`). It records checks actually performed and the repairs they prompted. It does not mark the release phase complete.
+This report records the first testing pass after the activity-authoring and export increment (`d3b2449`) and the checklist follow-through after `57446cc`. It records checks actually performed and the repairs they prompted. It does not mark the release phase complete. The later results below supersede earlier counts and remaining-work entries where stated.
 
 ## Environment and automated checks
 
@@ -56,7 +56,7 @@ These ratios were calculated from the CSS colour pairs using sRGB relative lumin
 
 The final source interface review returned **`disposition: ship`**, with no material source findings remaining. This applies to the reviewed repairs; it is not a full WCAG conformance verdict.
 
-## Remaining release checks
+## Remaining checks after the first pass
 
 - Broader Safari offline/export/visual coverage, Firefox and Edge, and a documented supported-browser matrix.
 - Actual packaged Mac authoring, print and export interactions; signing, notarisation and distribution installation checks.
@@ -66,3 +66,66 @@ The final source interface review returned **`disposition: ship`**, with no mate
 - Student usability sessions covering graphing, parameters, data import and activity completion.
 
 Online features remain outside this work.
+
+## Checklist follow-through
+
+The user selected the release checklist, excluding online features and separate AI/curriculum/mobile extensions. Testing uses existing Chrome and Safari. Temporary Edge software was removed and the Firefox download cancelled; neither browser is included in verified coverage.
+
+### Automated results and repairs
+
+- `npm run test:release`: **206 tests across 36 files pass**, run separately from compilation. Production TypeScript/web and `npm run desktop:build -- --bundles app` pass; the application bundle is 20.73 MiB. Existing large-chunk and dependency-directive warnings remain.
+- Added 27 numerical references: shifted repeated roots and poles, analytic derivatives, forward/backward logistic initial values, Cauchy/Poisson distributions, sphere mesh coordinates, degree-eight regression with large offsets and linked spreadsheet updates. Existing bundled SymPy, cancellation, timeout and project-round-trip checks also pass.
+- Eight recovery cases cover malformed and unsupported-version records, previous-save restoration, exact-byte preservation, repeated recovery copies and quota failure before/after archiving. Damaged saves now pause autosave until explicit recovery instead of being overwritten by a startup fallback. Valid previous saves are backed up before replacement. Imports do not execute actions.
+- Automated axe checks cover application semantics in all five workspaces, with canvas/MathLive mocked and colour contrast disabled. They establish no violations within that scope, not full WCAG conformance. Help focus containment/Escape/restoration, workspace arrows/Home/End and keyboard geometry have interaction tests.
+- Repaired Help focus and inert background handling, workspace/sheet tab semantics, row headings and header reflow. Added keyboard 2D construction/selection/pan/zoom/reset and 3D camera movement. Clipped graph instructions and cursor status remain in the accessibility tree. An experienced screen-reader user's announcements still need verification.
+- Deferred the approximately 593 KB Three.js scene chunk until 3D is opened. The initial main chunk is approximately 1.96 MB; this reduces startup JavaScript, not the complete offline download. The lazy chunk remains in the precache manifest. A local error boundary and rejected-chunk regression keep surrounding workspace controls available after a load failure.
+- The final source repair review returned **`disposition: ship`**. This applies to the reviewed repairs, not all release gates.
+
+### Additional manual evidence
+
+These checks used an immutable copy of the final web build on a fresh local origin. Stopping that origin's preview server makes all same-origin app/runtime requests unavailable; it does not disable the Mac's networking or prove a zero-byte network trace. The preceding first-pass Chrome checks did use browser networking disabled and measured zero transferred bytes.
+
+| Platform / check | Observed result |
+|---|---|
+| Chrome: final project import/reload | Imported a valid fixture with three graphs and fifteen notebook cells; reload retained it. A temporarily disabled Open button was resolved by bringing the test file dialog forward; no product filter defect was established. |
+| Chrome: 200%/400% zoom | All workspace tabs and header actions remain reachable in the new wrapped header. Notebook text reflows; Help Escape restores its trigger. These are spot checks, not exhaustive zoomed workflows. Restored 100%. |
+| Chrome: final offline reload and first 3D launch | After offline readiness and cache activation, stopped the preview server, reloaded, opened 3D for the first time and inspected the rendered paraboloid/grid. The deferred chunk loaded from cache. |
+| Chrome: final first symbolic worker launch offline | With the server stopped, checked the previously unchecked `x^2+2*x+1` against `(x+1)^2`; reported equivalence where both expressions are defined. |
+| Chrome: WebP and SVG graph exports offline | Downloaded both actual files. Inspected the 1630 × 1680 WebP: grid, parabola and line are painted. SVG snapshot download succeeded; full rendered SVG inspection remains open. |
+| Safari: final project import and offline reload | Imported the same fixture, activated the cache, stopped the preview server and reloaded successfully with saved content and offline readiness. |
+| Safari: first deferred 3D and symbolic worker offline | 3D exposes its loaded canvas and camera controls. The unchecked polynomial answer reports equivalence after first worker initialization. These are functional results; Safari screenshot/visual coverage remains open. |
+| Packaged Mac: baseline save and HTML export | In an isolated copy of the preceding build, downloaded an actual project JSON and a quadratic activity HTML worksheet. This does not establish every final native export path. |
+| Packaged Mac: Print / PDF fallback | Displays “Print / PDF is unavailable here” with instructions to export HTML and print from a browser. Native printing did not pass; the documented fallback is observable. |
+
+### Computation baseline
+
+`npm run benchmark` warms each workload five times, then records thirty samples. The baseline machine is an Apple M1 MacBook Air with 8 GiB RAM, Node v26.7.0. The [machine-readable result](COMPUTATION_BENCHMARK.json) records the run. Local budgets are 100 ms for ordinary computations and 1000 ms for meshing/ODE work; they are computation budgets, not measured browser interaction targets.
+
+| Workload | p95 milliseconds |
+|---|---:|
+| Compile 20 expressions | 0.700 |
+| Sample 10 notebook previews | 7.271 |
+| Evaluate 144 linked cells | 1.159 |
+| Degree-eight regression | 0.108 |
+| Implicit sphere, 36 cells | 33.244 |
+| Parametric torus, 64 cells | 5.871 |
+| Ten oscillator cycles | 1.165 |
+| Validate all-ten-template project | 0.058 |
+
+All budgets pass. Two thousand compile/project-validation cycles retain approximately 0.059 MiB additional heap after forced garbage collection. That limited Node computation soak does not establish browser/native memory stability, GPU frame rate, input-to-paint latency or battery behaviour during a 30-minute student session.
+
+### Current release gates
+
+| Gate | Status / remaining evidence |
+|---|---|
+| Automated mathematics, recovery and builds | Pass for the documented cases; representative coverage does not prove arbitrary mathematics. |
+| Chrome desktop compatibility | Offline runtime/3D, authoring, representative exports and zoom spot checks pass. Actual PDF saving, rendered SVG and exhaustive keyboard/error/contrast workflows remain open. |
+| Safari desktop compatibility | Import, templates and offline runtime/3D functional checks pass. Visual, print and every-format export coverage remain open. |
+| Native Mac compatibility | Build passes; baseline project/HTML downloads and print fallback observed. Final native interaction/export matrix and installation on another Mac remain open. |
+| Firefox and Edge | Unverified; no additional browsers will be installed as part of this work. |
+| VoiceOver / full accessibility | Source/automated repairs pass; experienced-user spoken output, complete graph access and all dynamic states remain open. |
+| Device performance and touch | Node computation baseline passes. Real touch hardware, browser/GPU measurements and sustained memory/battery remain open. |
+| Student usability | [Task scripts/result sheets](STUDENT_TESTING.md) prepared; no participants tested or results supplied. |
+| Public Mac distribution | [Script and runbook](MAC_DISTRIBUTION.md) prepared. Preflight correctly refuses to proceed without Developer ID credentials. The user does not yet have them; signing, notarisation, Gatekeeper and second-Mac installation remain blocked. |
+
+No public signed release, full browser matrix, complete accessibility audit or completed student study is claimed.

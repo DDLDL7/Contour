@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react'
 import { PointCoordinates } from './PointCoordinates'
 import { Circle, CircleDot, Crosshair, DraftingCompass, Ellipse, Link, Move, MousePointer2, Orbit, Pentagon, Ruler, Triangle, Waves } from 'lucide-react'
 import { estimateCurveDiagnostics, estimateSlope, findCurveExtrema, findCurveInflections, findCurveIntersections, findCurveRoots } from '../lib/analysis'
@@ -114,6 +114,8 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewport, setViewport] = useState(initialViewport)
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null)
+  const [keyboardStatus, setKeyboardStatus] = useState('')
+  const keyboardHelpId = useId()
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [analysisCurveId, setAnalysisCurveId] = useState('')
   const [analysisBounds, setAnalysisBounds] = useState({ from: '-2', to: '2' })
@@ -1015,7 +1017,8 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
         data-contour-ready="false"
         className={`graph-canvas ${geometryTool === 'select' ? '' : 'geometry-cursor'}`}
         tabIndex={0}
-        aria-label="Interactive two-dimensional graph. Drag to pan, scroll to zoom, or click a function to trace it."
+        aria-label="Interactive two-dimensional graph"
+        aria-describedby={keyboardHelpId}
         role="img"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId)
@@ -1090,12 +1093,41 @@ export function Graph2D({ graphs, geometry, onGeometryChange, parameterA, canvas
           })
         }}
         onKeyDown={(event) => {
+          if (event.metaKey || event.ctrlKey || event.altKey) return
+          if (event.key === 'Escape') {
+            event.preventDefault(); setPendingVertices([]); setTrace(null); setSelectedPointId(null); setKeyboardStatus('Construction and selection cleared.'); return
+          }
+          if (event.key === '+' || event.key === '=' || event.key === '-') {
+            event.preventDefault(); setViewport(current => ({ ...current, scale: Math.min(maxScale, Math.max(minScale, current.scale * (event.key === '-' ? 1 / buttonZoomFactor : buttonZoomFactor))) })); return
+          }
+          if (event.key === 'Home') { event.preventDefault(); setViewport(initialViewport); setCursor({ x: 0, y: 0 }); setKeyboardStatus('View reset. Cursor at x 0, y 0.'); return }
+          if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+            event.preventDefault()
+            const step = 20 / viewport.scale
+            const dx = event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0
+            const dy = event.key === 'ArrowUp' ? step : event.key === 'ArrowDown' ? -step : 0
+            if (event.shiftKey) { setViewport(current => ({ ...current, centerX: current.centerX + dx, centerY: current.centerY + dy })); return }
+            const next = { x: (cursor?.x ?? viewport.centerX) + dx, y: (cursor?.y ?? viewport.centerY) + dy }
+            setCursor(next); setKeyboardStatus(`Cursor x ${formatNumber(next.x)}, y ${formatNumber(next.y)}.`); return
+          }
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            const rect = event.currentTarget.getBoundingClientRect()
+            const point = cursor ?? { x: viewport.centerX, y: viewport.centerY }
+            const clientX = rect.left + rect.width / 2 + (point.x - viewport.centerX) * viewport.scale
+            const clientY = rect.top + rect.height / 2 - (point.y - viewport.centerY) * viewport.scale
+            if (geometryTool === 'select') { const selected = hitPoint(clientX, clientY); setSelectedPointId(selected?.id ?? null); selectTrace(clientX, clientY) }
+            else createAt(clientX, clientY)
+            setKeyboardStatus(`${geometryTool === 'select' ? 'Selected' : 'Placed construction cursor'} at x ${formatNumber(point.x)}, y ${formatNumber(point.y)}.`); return
+          }
           if ((event.key === 'Backspace' || event.key === 'Delete') && selectedPointId) {
             event.preventDefault()
             deleteSelectedPoint()
           }
         }}
       />
+      <p id={keyboardHelpId} className="screen-reader-only">Arrow keys move the construction cursor; Shift and arrows pan. Enter selects or places with the current tool. Plus and minus zoom; Home resets; Escape cancels. Delete removes a selected point. Drag to pan, scroll to zoom, or click a curve to trace.</p>
+      <p className="screen-reader-only" role="status">{keyboardStatus}</p>
       <div className="geometry-toolbar" role="toolbar" aria-label="Geometry tools">
         <div className="geometry-main-tools">{mainTools.map((tool) => toolButton(tool, true))}</div>
         {geometry.some(item => item.kind === 'tangent') && <details><summary>Saved tangents</summary>{geometry.filter(item => item.kind === 'tangent').map(item => <button key={item.id} type="button" onClick={() => onGeometryChange(geometry.filter(object => object.id !== item.id))}>Remove tangent at x = {item.kind === 'tangent' ? formatNumber(item.x) : ''}</button>)}</details>}

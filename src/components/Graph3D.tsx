@@ -172,6 +172,7 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
     const orthographicCamera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 1000)
     orthographicCamera.position.copy(camera.position)
     const controls = new OrbitControls(camera, canvas)
+    controls.listenToKeyEvents(canvas)
     controls.enableDamping = false
     controls.minDistance = 3
     controls.maxDistance = 70
@@ -479,7 +480,20 @@ export function Graph3D({ graphs, parameterA, canvasRef, darkMode, solids, onSol
 
   return (
     <div className="graph-stage" ref={containerRef}>
-      {error ? <div className="graph-error">{error}</div> : <canvas data-contour-ready="false" ref={canvasRef} className="graph-canvas" aria-label="Interactive three-dimensional graph. Drag to rotate and scroll to zoom." role="img" />}
+      {error ? <div className="graph-error" role="alert">{error}</div> : <canvas data-contour-ready="false" ref={canvasRef} className="graph-canvas" tabIndex={0} aria-label="Interactive three-dimensional graph. Arrow keys pan; Shift and arrows rotate; plus and minus zoom. Drag to rotate and scroll to zoom. Use camera controls to reset or choose a view." role="img" onKeyDown={event => {
+        if (!['+', '=', '-'].includes(event.key) || event.ctrlKey || event.metaKey || event.altKey) return
+        event.preventDefault()
+        const state = sceneRef.current
+        if (!state) return
+        const factor = event.key === '-' ? 1.2 : 1 / 1.2
+        if (state.camera instanceof THREE.OrthographicCamera) { state.camera.zoom = Math.min(8, Math.max(.15, state.camera.zoom / factor)); state.camera.updateProjectionMatrix() }
+        else {
+          const offset = state.camera.position.clone().sub(state.controls.target)
+          const distance = Math.min(70, Math.max(3, offset.length() * factor))
+          state.camera.position.copy(state.controls.target).add(offset.setLength(distance))
+        }
+        state.controls.update(); state.renderer.render(state.scene, state.camera)
+      }} />}
       {!error && !preview && (
         <>
           <div className="graph-controls graph-controls-3d" aria-label="3D graph controls">

@@ -28,6 +28,8 @@ export interface Project {
 }
 
 export const PROJECT_KEY = 'contour-project-v1'
+export const PROJECT_BACKUP_KEY = 'contour-project-backup-v1'
+export const PROJECT_RECOVERY_KEY = 'contour-project-recovery-v1'
 export const PROJECT_VERSION = 2
 
 export const graphColors = ['#4589ff', '#72daae', '#ffb599', '#a56eff', '#f1c21b']
@@ -119,7 +121,48 @@ export function loadProject(): Project {
 }
 
 export function saveProject(project: Project): void {
+  const previous = localStorage.getItem(PROJECT_KEY)
+  if (previous) {
+    // Never replace a damaged or newer-version record with the startup fallback.
+    let valid = true
+    try { parseProjectFile(previous) } catch { valid = false }
+    if (!valid) {
+      const archive: unknown = JSON.parse(localStorage.getItem(PROJECT_RECOVERY_KEY) ?? '[]')
+      if (!Array.isArray(archive) || !archive.some(copy => copy?.raw === previous)) throw new Error('Autosave paused: the stored project needs recovery.')
+    } else if (previous !== JSON.stringify(project)) localStorage.setItem(PROJECT_BACKUP_KEY, previous)
+  }
   localStorage.setItem(PROJECT_KEY, JSON.stringify(project))
+}
+
+export function loadProjectState(): { project: Project; warning: string } {
+  try {
+    const raw = localStorage.getItem(PROJECT_KEY)
+    if (!raw) return { project: starterProject(), warning: '' }
+    try { parseProjectFile(raw); return { project: loadProject(), warning: '' } } catch {
+      const backup = localStorage.getItem(PROJECT_BACKUP_KEY)
+      if (backup) {
+        try { return { project: parseProjectFile(backup), warning: 'The stored project could not be opened. Your previous save is loaded; autosave is paused so the original data stays intact.' } } catch { /* Keep both records intact. */ }
+      }
+      return { project: starterProject(), warning: 'The stored project could not be opened. Autosave is paused so the original data stays intact. Export stored data before choosing a workspace to keep.' }
+    }
+  } catch { return { project: starterProject(), warning: '' } }
+}
+
+/** Explicit recovery retains all damaged records before allowing a replacement. */
+export function preserveStoredProject(): void {
+  const raw = localStorage.getItem(PROJECT_KEY)
+  if (!raw) return
+  try { parseProjectFile(raw); return } catch { /* Preserve the exact bytes, including future-version files. */ }
+  const previous = localStorage.getItem(PROJECT_RECOVERY_KEY)
+  const copies: unknown = previous ? JSON.parse(previous) : []
+  if (!Array.isArray(copies)) throw new Error('Export stored data first: the recovery archive could not be opened.')
+  localStorage.setItem(PROJECT_RECOVERY_KEY, JSON.stringify([...copies, { savedAt: new Date().toISOString(), raw }]))
+  // Keep the original until the atomic primary write succeeds, even if quota
+  // allows this archive but rejects the following save.
+}
+
+export function storedProjectData(): string {
+  return JSON.stringify({ project: localStorage.getItem(PROJECT_KEY), backup: localStorage.getItem(PROJECT_BACKUP_KEY), recovery: localStorage.getItem(PROJECT_RECOVERY_KEY) }, null, 2)
 }
 
 export function downloadProject(project: Project): void {

@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-10T18:30:43.277Z",
+  "environment": {
+    "node": "v26.7.0",
+    "cpu": "Apple M1",
+    "memoryGiB": 8
+  },
+  "scope": "Node computation only; excludes browser input-to-paint, GPU frame rate, battery and native memory.",
+  "results": [
+    {
+      "name": "Compile 20 ordinary expressions",
+      "medianMs": 0.338,
+      "p95Ms": 0.7,
+      "budgetMs": 100,
+      "pass": true
+    },
+    {
+      "name": "Sample 10 notebook 2D previews",
+      "medianMs": 5.52,
+      "p95Ms": 7.271,
+      "budgetMs": 100,
+      "pass": true
+    },
+    {
+      "name": "Evaluate 144 linked spreadsheet cells",
+      "medianMs": 0.818,
+      "p95Ms": 1.159,
+      "budgetMs": 100,
+      "pass": true
+    },
+    {
+      "name": "Fit degree-eight regression",
+      "medianMs": 0.094,
+      "p95Ms": 0.108,
+      "budgetMs": 100,
+      "pass": true
+    },
+    {
+      "name": "Mesh implicit sphere at 36 cells",
+      "medianMs": 31.673,
+      "p95Ms": 33.244,
+      "budgetMs": 1000,
+      "pass": true
+    },
+    {
+      "name": "Mesh parametric torus at 64 cells",
+      "medianMs": 5.435,
+      "p95Ms": 5.871,
+      "budgetMs": 1000,
+      "pass": true
+    },
+    {
+      "name": "Solve 10 oscillator cycles",
+      "medianMs": 0.672,
+      "p95Ms": 1.165,
+      "budgetMs": 1000,
+      "pass": true
+    },
+    {
+      "name": "Validate project with all ten templates",
+      "medianMs": 0.045,
+      "p95Ms": 0.058,
+      "budgetMs": 100,
+      "pass": true
+    }
+  ],
+  "soak": {
+    "cycles": 2000,
+    "retainedHeapGrowthMiB": 0.059,
+    "garbageCollectionAvailable": true
+  },
+  "projectBytes": 10600
+}

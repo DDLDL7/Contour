@@ -3,7 +3,7 @@ import { EquationField } from './EquationField'
 import { compileGraph } from '../lib/math'
 import { areNotebookGraphBounds, defaultNotebookGraphBounds, type NotebookCell, type NotebookGraphBounds } from '../lib/notebook'
 import { notebookGraphPaths, notebookInequalityRegion } from '../lib/notebookGraph'
-import { Graph3D } from './Graph3D'
+import { Graph3D } from './Graph3DLoader'
 import type { ExpressionRow } from '../lib/project'
 import { evaluateSpreadsheet, spreadsheetColumns, spreadsheetSheets, type SpreadsheetData } from '../lib/spreadsheet'
 

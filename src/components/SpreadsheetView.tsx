@@ -119,10 +119,18 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
 
   return <div className="spreadsheet-view">
     <div className="spreadsheet-heading"><div><span className="tools-overline">Spreadsheet & statistics</span><h2>Linked data table</h2><p>Enter formulas such as <code>=A2*2</code> or <code>='Sheet 2'!A2</code>. Sheets and graph variables recalculate together.</p></div></div>
-    <div className="spreadsheet-tabs" role="tablist" aria-label="Spreadsheet sheets">{sheets.map((item) => <button key={item.id} type="button" role="tab" aria-selected={item.id === sheet.id} className={item.id === sheet.id ? 'active' : ''} onClick={() => { onChange({ ...data, cells: item.cells, sheets, activeSheetId: item.id }); setSelectedCell(null) }}>{item.name}</button>)}<button type="button" onClick={addSheet} disabled={sheets.length >= 20} title={sheets.length >= 20 ? 'Maximum of 20 sheets' : 'Add sheet'}>+ Add sheet</button></div>
+    <div className="spreadsheet-tabs"><div className="sheet-tab-list" role="tablist" aria-label="Spreadsheet sheets" onKeyDown={event => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+      const index = sheets.findIndex(item => item.id === sheet.id)
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? sheets.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + sheets.length) % sheets.length
+      event.preventDefault()
+      const item = sheets[next]
+      onChange({ ...data, cells: item.cells, sheets, activeSheetId: item.id }); setSelectedCell(null)
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus()
+    }}>{sheets.map((item) => <button key={item.id} id={`sheet-tab-${item.id}`} type="button" role="tab" tabIndex={item.id === sheet.id ? 0 : -1} aria-controls="sheet-panel" aria-selected={item.id === sheet.id} className={item.id === sheet.id ? 'active' : ''} onClick={() => { onChange({ ...data, cells: item.cells, sheets, activeSheetId: item.id }); setSelectedCell(null) }}>{item.name}</button>)}</div><button type="button" onClick={addSheet} disabled={sheets.length >= 20} title={sheets.length >= 20 ? 'Maximum of 20 sheets' : 'Add sheet'}>+ Add sheet</button></div>
     <div className="spreadsheet-layout">
-      <section className="spreadsheet-grid-card" aria-label="Editable spreadsheet">
-        <div className="spreadsheet-scroll"><table className="spreadsheet-grid"><thead><tr><th aria-label="Row number" />{spreadsheetColumns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+      <section className="spreadsheet-grid-card" id="sheet-panel" role="tabpanel" aria-labelledby={`sheet-tab-${sheet.id}`} aria-label="Editable spreadsheet">
+        <div className="spreadsheet-scroll"><table className="spreadsheet-grid"><thead><tr><th scope="col">Row</th>{spreadsheetColumns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
           <tbody>{Array.from({ length: spreadsheetRows }, (_, rowIndex) => rowIndex + 1).map((row) => <tr key={row}><th scope="row">{row}</th>{spreadsheetColumns.map((column) => {
             const address = `${column}${row}`; const value = values[address]
             return <td key={address} className={value?.error ? 'cell-error' : ''}>

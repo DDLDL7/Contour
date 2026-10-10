@@ -335,7 +335,7 @@ These entries complete the defined offline operation families; they do not asser
 ## Remaining work toward the full product
 
 1. **Authoring extensions:** the offline authoring increment below implements guided templates, worksheet exports and bounded declarative action sequences. A broader curriculum library, formatted publication-quality mathematics and unrestricted sandboxed programming remain separate extensions. Existing controls never execute imported code.
-2. **Validation and release:** the first release testing pass below covers Chrome offline reload/runtime launch, representative exports and authoring interactions, a Safari functional smoke check, and theme contrast repairs. Broader browser/hardware coverage, student usability sessions, complete accessibility/performance audits, numerical/reference coverage and Mac signing/notarisation remain. Representative tests do not prove every mathematical input correct.
+2. **Validation and release:** the release passes below cover offline reload/runtime launch, representative exports and authoring interactions, keyboard/focus repairs, numerical references, recovery safeguards and computation benchmarks. Broader browser/hardware coverage, student usability sessions, complete accessibility/performance audits and Mac signing/notarisation remain. Representative tests do not prove every mathematical input correct. See the current status table in [release testing](docs/RELEASE_TESTING.md).
 3. **Online platform — excluded from this request:** accounts/permissions, syncing/conflicts, collaborative editing, teacher assignments/progress and moderated searchable resource publishing. Offline projects remain account-free.
 4. **Separate later capabilities:** optional no-paid-API local assistant, mobile/AR applications and platform-specific distribution work.
 
@@ -366,3 +366,16 @@ Finishing interface review returned `disposition: ship`, with both numeric-draft
 - **Safari progress:** notebook template insertion and exact answer equivalence pass a functional smoke check. Safari visual, offline and export coverage remain outstanding. Real-device, performance, student usability and Mac distribution checks remain in the release backlog.
 
 No online feature is added by this testing pass.
+
+## 10 October 2026 — release checklist follow-through
+
+- **Scope confirmed:** complete the release checklist; online features and the separately listed AI, curriculum-library and mobile/AR extensions remain excluded.
+- **Verification:** 206 tests across 36 files pass. Production web/TypeScript and packaged Mac builds pass. Added 27 independent numerical/reference cases, eight recovery cases, semantic accessibility checks across five workspaces, keyboard interaction checks and a rejected 3D-chunk regression.
+- **Recovery:** damaged, malformed and newer-version autosaves are preserved instead of silently overwritten. Startup pauses saving, loads a valid previous save when possible, and offers stored-data export and explicit recovery. Quota failures preserve the original; recovery archives retain successive damaged records.
+- **Accessibility repairs:** Help contains focus and restores its trigger after Escape; workspace and sheet tabs use arrow/Home/End navigation; sheet controls have a proper tablist/panel structure. 2D geometry supports a keyboard construction cursor, selection, pan, zoom and reset. 3D supports keyboard camera movement. Cursor instructions/status stay in the accessibility tree. Header reflow keeps navigation reachable at 200%/400% zoom. These changes do not establish complete screen-reader graph access or WCAG conformance.
+- **Performance:** Three.js loads when a 3D workspace/preview opens; it is still precached for offline use. Load failures stay local with reload guidance. Repeatable computation benchmarks pass on an 8 GB Apple M1; browser latency, frame rate, battery and sustained native memory still require device measurements.
+- **Distribution preparation:** `npm run release:mac` checks credentials, validates tests/build/signature, notarises, staples, assesses Gatekeeper and creates a hashed archive. Preflight correctly stops without Developer ID credentials; the user does not have them yet. Public distribution and second-Mac installation remain blocked, not completed.
+- **Human testing:** [student/device task scripts and result sheets](docs/STUDENT_TESTING.md) are prepared. No participants, real touch-device results or experienced VoiceOver results are claimed.
+- **Browser policy:** further checks use existing Chrome and Safari. Temporary Edge software was removed and the Firefox download cancelled; those browsers remain unverified.
+
+Current evidence and outstanding release gates are recorded in [RELEASE_TESTING.md](docs/RELEASE_TESTING.md). The source repair review returned **`disposition: ship`**; the release milestone stays open for the remaining gates.

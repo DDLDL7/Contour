@@ -80,9 +80,14 @@ The offline mathematical feature families are implemented with documented bounds
 ## Verify
 
 ```sh
-npm test
+npm run test:release
 npm run build
+npm run benchmark
 ```
+
+Run tests separately from builds so compilation does not compete with the bundled symbolic runtime. [Release testing](docs/RELEASE_TESTING.md) records actual coverage and remaining checks. [Mac distribution](docs/MAC_DISTRIBUTION.md) describes signing/notarisation, and [student testing](docs/STUDENT_TESTING.md) provides task scripts and result sheets.
+
+If a stored project is damaged or from an unsupported version, autosave pauses and the previous valid save loads when available. Use **Export stored data** to keep the original bytes before choosing **Keep this workspace**. Recovery copies remain on the device; exported project files are still the durable backup.
 
 ### Notebook activity authoring
 
