@@ -8,6 +8,8 @@
   --ink: #e2e2e6;
   --muted: #a2a8b7;
   --blue: #b3c5ff;
+  --on-blue: #142a5f;
+  --error: #ffb4ab;
   --green: #72daae;
   --orange: #ffb599;
   background: var(--bench);
@@ -25,6 +27,8 @@
   --ink: #20242d;
   --muted: #586374;
   --blue: #255fce;
+  --on-blue: #fff;
+  --error: #982b29;
   --green: #147455;
   --orange: #a84822;
 }
@@ -73,7 +77,7 @@
 .rail-index { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .rail-swatch { width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto; }
 .rail-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 12px Georgia, Cambria, serif; }
-.rail-state, .rail-error { color: #ffb4ab; }
+.rail-state, .rail-error { color: var(--error); }
 .rail-item svg { color: var(--muted); flex: 0 0 auto; }
 .rail-empty { padding: 8px; color: var(--muted); font-size: 12px; }
 .rail-footer { display: flex; justify-content: space-between; gap: 6px; padding: 11px 15px; border-top: 1px solid var(--line); color: var(--muted); white-space: nowrap; font: 10px Georgia, Cambria, serif; }
@@ -83,7 +87,7 @@
 .app-shell .expression-heading p { display: none; }
 .app-shell .add-top { background: transparent; border: 0; }
 .expression-commands { display: flex; align-items: center; gap: 7px; padding: 8px 14px; border-bottom: 1px solid var(--line); }
-.app-shell .expression-commands .add-expression { flex: 0 0 auto; margin: 0; padding: 8px 11px; border: 0; border-radius: 3px; background: var(--blue); color: #142a5f; font-size: 12px; }
+.app-shell .expression-commands .add-expression { flex: 0 0 auto; margin: 0; padding: 8px 11px; border: 0; border-radius: 3px; background: var(--blue); color: var(--on-blue); font-size: 12px; }
 .expression-search { min-width: 0; flex: 1; display: flex; align-items: center; gap: 4px; padding: 0 7px; color: var(--muted); }
 .expression-search input { width: 100%; min-width: 0; height: 30px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; }
 .expression-search button { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); }
@@ -98,7 +102,7 @@
 .row-color-action:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
 .app-shell .equation-field { min-height: 42px; padding: 6px 0; color: var(--ink); font-size: 17px; }
 .app-shell .expression-type, .app-shell .expression-error { margin: -2px 12px 11px 43px; color: var(--muted); font: 11px Georgia, Cambria, serif; }
-.app-shell .expression-error { color: #ffb4ab; }
+.app-shell .expression-error { color: var(--error); }
 .app-shell .has-error { background: color-mix(in srgb, var(--panel) 82%, #93000a); border-color: #75404a; }
 .filter-empty { padding: 8px 12px; color: var(--muted); font-size: 12px; }
 .app-shell .empty-expressions { margin: 4px 8px 12px; border: 1px dashed var(--line); border-radius: 4px; background: var(--panel); color: var(--muted); }
@@ -134,7 +138,7 @@
 .scene-vector-inputs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; margin-top: 9px; }
 .scene-vector-inputs label { display: grid; gap: 3px; color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .scene-vector-inputs input { min-width: 0; width: 100%; padding: 6px; border: 1px solid var(--line); border-radius: 2px; background: var(--bench); color: var(--ink); font-size: 11px; }
-.app-shell .scene-vector-error { margin: 7px 0 0; color: #ffb4ab; font-size: 10px; }
+.app-shell .scene-vector-error { margin: 7px 0 0; color: var(--error); font-size: 10px; }
 .scene-add-grid { display: flex; flex-wrap: wrap; gap: 5px; }
 .scene-add-grid button { border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; background: var(--panel); color: var(--blue); font-size: 11px; }
 .app-shell .visual-panel { background: var(--surface); }
@@ -166,7 +170,7 @@
 .app-shell .graph-controls .solid-controls { max-height: min(55vh,450px); overflow-y: auto; border-color: var(--line); }
 .app-shell .graph-controls-3d { align-items: center; }
 .app-shell .graph-controls-3d button { min-width: 38px; height: 31px; font-size: 11px; }
-.app-shell .graph-controls-3d button.active { background: var(--blue); color: #142a5f; }
+.app-shell .graph-controls-3d button.active { background: var(--blue); color: var(--on-blue); }
 .camera-presets { display: grid; width: 100%; gap: 1px; padding: 4px 0; border-block: 1px solid var(--line); }
 .app-shell .graph-controls-3d .camera-presets button { width: 100%; min-width: 38px; height: 27px; font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .slice-hud { position: absolute; top: 68px; right: calc(100% + 8px); display: grid; gap: 6px; width: 165px; padding: 8px; border: 1px solid var(--line); border-radius: 3px; background: var(--panel); color: var(--muted); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
@@ -220,7 +224,7 @@
 .app-shell[data-theme] .math-tool-card-header { border-bottom-color: var(--line); }
 .app-shell[data-theme] .math-tool-card-icon { border-radius: 3px; background: var(--raised); color: var(--blue); }
 .app-shell[data-theme] :is(.math-tool-equation,.math-tool-data,.math-tool-options input,.notebook-equation,.notebook-cell textarea,.notebook-visibility input[type="text"],.notebook-visibility select,.notebook-input-cell input,.notebook-input-cell select,.notebook-operation select,.probability-fields input,.probability-fields select,.spreadsheet-chart-options select,.regression-picker select) { border-color: var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); }
-.app-shell[data-theme] :is(.math-tool-run,.probability-fields button) { border-radius: 3px; background: var(--blue); color: #142a5f; }
+.app-shell[data-theme] :is(.math-tool-run,.probability-fields button) { border-radius: 3px; background: var(--blue); color: var(--on-blue); }
 .app-shell[data-theme] :is(.math-tool-result,.notebook-answer,.probability-result > div,.inference-result,.regression-summary) { border-color: var(--line); border-radius: 3px; background: var(--bench); color: var(--ink); }
 .app-shell[data-theme] :is(.math-result-field,.math-tool-result .math-result-text,.probability-result b,.inference-result strong,.regression-summary strong) { color: var(--green); }
 .math-engine-picker { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
@@ -344,3 +348,6 @@
 .sequence-step-buttons button { display: grid; place-items: center; }
 .sequence-actions button { display: inline-flex; align-items: center; gap: 7px; }
 @media(max-width:700px) { .export-menu { position: static; } .app-shell[data-theme] .export-options { top: 100%; right: 14px; max-height: calc(100vh - 180px); overflow-y: auto; } .export-menu summary span { display: none; } }
+
+.app-shell[data-theme] :is(.notebook-error,.math-tool-error,.probability-error,.graph-error,.field-error) { color: var(--error); }
+.app-shell[data-theme] :is(.notebook-hint,.notebook-answer p) { color: var(--muted); }

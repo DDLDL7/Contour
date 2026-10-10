@@ -75,8 +75,15 @@ self.addEventListener('fetch', (event) => {
     })())
     return
   }
+  // Public bundled assets and verified runtime files are identical regardless of Origin. A module
+  // worker can send Origin where our installation fetch did not; development
+  // and preview hosts use Vary: Origin, which otherwise hides the cached copy.
+  const runtimePath = new URL('math-runtime/', self.location.href).pathname
+  const assetPath = new URL('assets/', self.location.href).pathname
+  const path = new URL(event.request.url).pathname
+  const cacheOptions = { ignoreVary: path.startsWith(runtimePath) || path.startsWith(assetPath) }
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
+    caches.match(event.request, cacheOptions).then((cached) => cached || fetch(event.request).then((response) => {
       if (response.ok) {
         const copy = response.clone()
         caches.open(CACHE).then((cache) => cache.put(event.request, copy))

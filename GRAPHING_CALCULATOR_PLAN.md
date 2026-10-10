@@ -335,7 +335,7 @@ These entries complete the defined offline operation families; they do not asser
 ## Remaining work toward the full product
 
 1. **Authoring extensions:** the offline authoring increment below implements guided templates, worksheet exports and bounded declarative action sequences. A broader curriculum library, formatted publication-quality mathematics and unrestricted sandboxed programming remain separate extensions. Existing controls never execute imported code.
-2. **Validation and release:** broader browser/hardware coverage, student usability sessions, accessibility/performance audits, numerical/reference coverage and Mac signing/notarisation. Representative tests do not prove every mathematical input correct.
+2. **Validation and release:** the first release testing pass below covers Chrome offline reload/runtime launch, representative exports and authoring interactions, a Safari functional smoke check, and theme contrast repairs. Broader browser/hardware coverage, student usability sessions, complete accessibility/performance audits, numerical/reference coverage and Mac signing/notarisation remain. Representative tests do not prove every mathematical input correct.
 3. **Online platform — excluded from this request:** accounts/permissions, syncing/conflicts, collaborative editing, teacher assignments/progress and moderated searchable resource publishing. Offline projects remain account-free.
 4. **Separate later capabilities:** optional no-paid-API local assistant, mobile/AR applications and platform-specific distribution work.
 
@@ -354,3 +354,15 @@ These features advance offline phase 7. Online publishing, assignments and share
 Validation for this authoring increment: 156 tests across 30 files pass, including all template round trips, atomic sequence execution/rejection, export escaping/answer omission, image encoding/fallback handling and unpainted-canvas rejection. Production web build and packaged Mac build pass with existing bundle warnings. Template insertion and HTML download were checked in Chrome. Final mobile/sequence rendering, print-dialog behaviour and the updated painted-image path remain visually unverified because native UI automation lost access to the browser window.
 
 Finishing interface review returned `disposition: ship`, with both numeric-draft editing and initial 3D canvas readiness resolved from source. The final suite was run with two workers after the build: an earlier concurrent run exceeded the symbolic test’s five-second timeout and caused cascading shared-runtime failures. Visual checks listed above remain unverified.
+
+## 10 October 2026 — first release testing pass
+
+[Release testing results](docs/RELEASE_TESTING.md) record the environment, checks, repairs and remaining coverage. This pass advances validation priority 2 without marking the release milestone complete.
+
+- **Automated validation:** 160 tests across 31 files pass, including four new service-worker regression cases. Production web and packaged Mac builds pass. All listed bundled assets and local runtime hashes/sizes were verified.
+- **Offline repair:** live testing exposed an Origin-header mismatch against cached responses with `Vary: Origin`. The service worker now matches public app/runtime assets across this mismatch while preserving normal Vary matching for other paths and runtime integrity verification. A fresh-origin production reload and first symbolic-engine launch both succeed with networking disabled and zero bytes transferred.
+- **Authoring/export verification:** Chrome checks cover decimal/negative sequence editing, invalid draft rejection, one-step Undo and non-execution on reload; a 400px viewport; keyboard dismissal/reopening of Export; two-page print preview with expected answers omitted; and inspected nonblank 2D JPEG and offline 3D PNG downloads. These checks supersede the preceding increment's unverified status for those specific interactions. PDF saving and wider browser/native export coverage remain outstanding.
+- **Accessibility progress:** repaired light-theme primary-label contrast and theme-specific error colours; inspected the calculation error in both themes. A 200% zoom spot check was performed, but header navigation and full reflow coverage remain open. Final source interface review returned `disposition: ship`; this is not a complete accessibility audit.
+- **Safari progress:** notebook template insertion and exact answer equivalence pass a functional smoke check. Safari visual, offline and export coverage remain outstanding. Real-device, performance, student usability and Mac distribution checks remain in the release backlog.
+
+No online feature is added by this testing pass.
