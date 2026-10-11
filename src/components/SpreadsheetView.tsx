@@ -131,15 +131,15 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
     <div className="spreadsheet-layout">
       <section className="spreadsheet-grid-card" id="sheet-panel" role="tabpanel" aria-labelledby={`sheet-tab-${sheet.id}`} aria-label="Editable spreadsheet">
         <div className="spreadsheet-scroll"><table className="spreadsheet-grid"><thead><tr><th scope="col">Row</th>{spreadsheetColumns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
-          <tbody>{Array.from({ length: spreadsheetRows }, (_, rowIndex) => rowIndex + 1).map((row) => <tr key={row}><th scope="row">{row}</th>{spreadsheetColumns.map((column) => {
+          <tbody>{Array.from({ length: spreadsheetRows }, (_, rowIndex) => rowIndex + 1).map((row) => <tr key={row}><th scope="row">{row === 1 ? '1 · Headers' : row}</th>{spreadsheetColumns.map((column) => {
             const address = `${column}${row}`; const value = values[address]
             return <td key={address} className={value?.error ? 'cell-error' : ''}>
-              <input aria-label={`${sheet.name} cell ${address}`} title={value?.error ?? (value?.value === null || value?.value === undefined ? '' : `Value: ${formatNumber(value.value, 6)}`)} value={selectedCell === address || !value?.raw.startsWith('=') || value.value === null ? (sheet.cells[address] ?? '') : formatNumber(value.value, 6)} onFocus={() => setSelectedCell(address)} onBlur={() => setSelectedCell(null)} onChange={(event) => updateCell(address, event.target.value)} />
+              <input aria-label={`${sheet.name} cell ${address}${row === 1 ? ' (header)' : ''}`} title={value?.error ?? (value?.value === null || value?.value === undefined ? '' : `Value: ${formatNumber(value.value, 6)}`)} value={selectedCell === address || !value?.raw.startsWith('=') || value.value === null ? (sheet.cells[address] ?? '') : formatNumber(value.value, 6)} onFocus={() => setSelectedCell(address)} onBlur={() => setSelectedCell(null)} onChange={(event) => updateCell(address, event.target.value)} />
               {value?.error && <span className="cell-error-tip" role="tooltip">{value.error}</span>}
             </td>
           })}</tr>)}</tbody>
         </table></div>
-        <p className="spreadsheet-note">Formulas update when referenced cells or project variables change. Circular references are reported in the affected cells.</p>
+        <p className="spreadsheet-note">Row 1 contains column headers and is excluded from charts and statistics. Enter data from row 2. Formulas update when referenced cells or project variables change. Circular references are reported in the affected cells.</p>
       </section>
       <section className="spreadsheet-chart-card" aria-label="Scatter plot, regression, and residuals">
         <div className="spreadsheet-card-heading"><div><h3>{chartKind === 'scatter' ? 'Scatter plot' : chartKind === 'bar' ? 'Bar chart' : chartKind === 'histogram' ? 'Histogram' : chartKind === 'box' ? 'Box plot' : 'Stem-and-leaf'}</h3><p>{chartKind === 'scatter' || chartKind === 'bar' ? 'Columns A and B · rows 2–18' : `Column ${dataColumn} · rows 2–18`}</p></div><span>{chartKind === 'bar' ? barData.length : chartKind === 'scatter' ? points.length : numericValues.length} values</span></div>
@@ -147,7 +147,7 @@ export function SpreadsheetView({ data, definitions, parameterA, onChange }: Pro
         {chartKind !== 'scatter' ? <>{singleVariableChart}</> : <>
         <label className="regression-picker">Regression model<select value={regressionKind} onChange={(event) => onChange({...data,regressionKind:event.target.value as RegressionKind})}><option value="linear">Linear</option><option value="exponential">Exponential</option><option value="quadratic">Quadratic</option><option value="polynomial">Polynomial</option></select></label>
         {regressionKind === 'polynomial' && <label className="regression-picker">Degree (2–8)<input type="number" min="2" max="8" value={polynomialDegree} onChange={event => onChange({...data,polynomialDegree:Math.max(2,Math.min(8,Number(event.target.value) || 2))})} /></label>}
-        {points.length < 2 ? <div className="spreadsheet-chart-empty">Enter at least two numeric x,y pairs in columns A and B.</div> : <svg className="spreadsheet-chart" viewBox="0 0 420 260" role="img" aria-label={`${regressionKind} regression scatter plot`}>
+        {points.length < 2 ? <div className="spreadsheet-chart-empty">Enter at least two numeric x,y pairs, starting at A2 and B2. Row 1 is for headers.</div> : <svg className="spreadsheet-chart" viewBox="0 0 420 260" role="img" aria-label={`${regressionKind} regression scatter plot`}>
           <line x1="24" y1="236" x2="396" y2="236" className="chart-axis"/><line x1="24" y1="24" x2="24" y2="236" className="chart-axis"/>
           {regression && <polyline points={fitLinePoints} className="chart-fit" />}
           {points.map((point, index) => <circle key={`${point.x}-${point.y}-${index}`} cx={scale(point.x, bounds.minX, bounds.maxX, 420)} cy={260 - scale(point.y, bounds.minY, bounds.maxY, 260)} r="4.5" className="chart-dot"><title>({formatNumber(point.x, 3)}, {formatNumber(point.y, 3)})</title></circle>)}

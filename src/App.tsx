@@ -4,7 +4,7 @@ import { BookOpenText, Box, Calculator, ChartNoAxesCombined, Copy, Download, Eye
 import { Graph2D } from './components/Graph2D'
 import { Graph3D } from './components/Graph3DLoader'
 import { EquationField } from './components/EquationField'
-import { MathTools } from './components/MathTools'
+import { MathWorkspace } from './components/MathWorkspace'
 import { SpreadsheetView } from './components/SpreadsheetView'
 import { ParameterControl } from './components/ParameterControl'
 import { NotebookView } from './components/NotebookView'
@@ -50,7 +50,8 @@ function App() {
   const [history, setHistory] = useState(() => createHistory(startup.project))
   const project = history.present
   const [view, setView] = useState<View>('2d')
-  const [railOpen, setRailOpen] = useState(true)
+  const [railOpen, setRailOpen] = useState(false)
+  const [toolSession, setToolSession] = useState(0)
   const [splitView, setSplitView] = useState(false)
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
   const [expressionFilter, setExpressionFilter] = useState('')
@@ -153,13 +154,14 @@ function App() {
         setView((['2d', '3d', 'tools', 'sheet', 'notebook'] as View[])[Number(event.key) - 1])
         return
       }
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
+      const editingText = event.composedPath().some(node => node instanceof HTMLElement && (node.matches('input, textarea, math-field') || node.isContentEditable))
+      if (!editingText && (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         setAnimationStop((current) => current + 1)
         setHistory((current) => event.shiftKey ? redoHistory(current) : undoHistory(current))
         return
       }
-      if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'y') {
+      if (!editingText && event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === 'y') {
         event.preventDefault()
         setAnimationStop((current) => current + 1)
         setHistory(redoHistory)
@@ -276,6 +278,7 @@ function App() {
       setRecoveryWarning('')
       setAnimationStop((current) => current + 1)
       setProject(imported)
+      setToolSession(current => current + 1)
       setMessage(`Opened ${file.name}.`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not open this project.')
@@ -288,6 +291,7 @@ function App() {
     setRecoveryWarning('')
     setAnimationStop((current) => current + 1)
     setProject(starterProject())
+    setToolSession(current => current + 1)
     setMessage('New project started.')
   }
 
@@ -295,11 +299,10 @@ function App() {
     <div className="app-shell" data-theme={theme}>
       <header className="app-header" inert={helpOpen}>
         <div className="header-identity">
-          {(view === '2d' || view === '3d') && <button className="icon-button rail-toggle" type="button" onClick={() => setRailOpen((open) => !open)} aria-label={railOpen ? 'Hide expression rail' : 'Show expression rail'} title={railOpen ? 'Hide expression rail' : 'Show expression rail'}>{railOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button>}
+          {(view === '2d' || view === '3d') && <button className="icon-button rail-toggle" type="button" onClick={() => setRailOpen((open) => !open)} aria-label={railOpen ? 'Hide expression summary' : 'Show expression summary'} title={railOpen ? 'Hide expression summary' : 'Show expression summary'}>{railOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}</button>}
           <div className="brand" aria-label="Contour home"><img className="brand-mark" src="/contour-app-icon.png" alt="" /><span className="brand-name">CONTOUR</span></div>
           <div className="brand-divider" />
           <input className="project-title" aria-label="Project title" value={project.title} maxLength={80} onChange={(event) => setProject((current) => current.title === event.target.value ? current : { ...current, title: event.target.value }, 'project:title')} />
-          <span className="save-status"><span className="status-dot" />{saveStatus}</span>
           <div className="header-history"><button className="icon-button" type="button" onClick={() => { setAnimationStop((current) => current + 1); setHistory(undoHistory) }} aria-label="Undo" title="Undo (⌘Z)" disabled={history.past.length === 0}><Undo2 size={17} /></button><button className="icon-button" type="button" onClick={() => { setAnimationStop((current) => current + 1); setHistory(redoHistory) }} aria-label="Redo" title="Redo (⌘⇧Z)" disabled={history.future.length === 0}><Redo2 size={17} /></button></div>
         </div>
         <nav className="view-switch" role="tablist" aria-label="Workspace view" onKeyDown={event => {
@@ -322,6 +325,8 @@ function App() {
         </div>
       </header>
 
+      <div className={`save-status-bar ${saveStatus.startsWith('Could not') ? 'save-failed' : ''}`} role="status" aria-live="polite" inert={helpOpen}><span className="status-dot" aria-hidden="true" />{saveStatus}</div>
+
       {recoveryWarning && <section className="recovery-notice" role="alert" inert={helpOpen}>
         <p>{recoveryWarning}</p>
         <button type="button" onClick={() => { try { downloadBlob(new Blob([storedProjectData()], { type: 'application/json' }), 'contour-stored-data.json') } catch { setMessage('Could not export stored data from this device.') } }}>Export stored data</button>
@@ -329,15 +334,14 @@ function App() {
       </section>}
 
       <main className={`workspace view-${view} ${railOpen ? '' : 'rail-hidden'}`} inert={helpOpen}>
-        <aside className="project-rail" aria-label="Expression rail">
-          <div className="rail-heading"><span><Sigma size={16} /> Expressions</span><button type="button" onClick={addExpression} aria-label="Add expression" title="Add expression"><Plus size={17} /></button></div>
-          <div className="rail-items">{compiledRows.length === 0 ? <p className="rail-empty">No expressions yet</p> : compiledRows.map((row, index) => <button key={row.id} type="button" className={`rail-item ${row.error ? 'rail-error' : ''}`} onClick={() => { setExpressionFilter(''); document.querySelector(`math-field[data-expression-id="${CSS.escape(row.id)}"]`)?.scrollIntoView({ block: 'center' }) }} title={row.text || `Expression ${index + 1}`}><span className="rail-index">{index + 1}</span><span className="rail-swatch" style={{ backgroundColor: row.color }} /><span className="rail-text">{row.text || 'Empty expression'}</span>{row.error ? <span className="rail-state">!</span> : row.graph ? <Eye size={14} /> : null}</button>)}</div>
-          <div className="rail-footer"><span>Active rail: {view === '3d' ? 'Spatial' : 'Cartesian'}</span><span>{compiledRows.length} items</span></div>
+        <aside className="project-rail" aria-label="Expression summary">
+          <div className="rail-heading"><span><Sigma size={16} /> Expression summary</span></div>
+          <div className="rail-items">{compiledRows.length === 0 ? <p className="rail-empty">No expressions yet</p> : compiledRows.map((row, index) => <button key={row.id} type="button" className={`rail-item ${row.error ? 'rail-error' : ''}`} onClick={() => { setExpressionFilter(''); setView(row.graph && ['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(row.graph.kind) ? '3d' : '2d'); requestAnimationFrame(() => { const field = document.querySelector<HTMLElement>(`math-field[data-expression-id="${CSS.escape(row.id)}"]`); field?.scrollIntoView({ block: 'center' }); field?.focus() }) }} title={row.text || `Expression ${index + 1}`}><span className="rail-index">{index + 1}</span><span className="rail-swatch" style={{ backgroundColor: row.color }} /><span className="rail-text">{row.text || 'Empty expression'}</span>{row.error ? <span className="rail-state">!</span> : row.graph ? <Eye size={14} /> : null}</button>)}</div>
+          <div className="rail-footer"><span>All project expressions</span><span>{compiledRows.length} items</span></div>
         </aside>
         <aside className="expression-panel" aria-label="Expressions">
           <div className="expression-heading">
             <div><h1>{view === '3d' ? 'Scene Elements' : 'Expressions'}</h1><p>{view === '3d' ? `${graphs.filter((item) => ['surface', 'spaceCurve', 'parametricSurface', 'implicitSurface'].includes(item.graph.kind)).length + project.solids.length + project.vectorFields.length} visible and editable entities` : 'Functions, variables and constructions'}</p></div>
-            <button className="icon-button add-top" type="button" aria-label="Add expression" title="Add expression" onClick={addExpression}><Plus size={20} /></button>
           </div>
 
           <div className="expression-commands"><button className="add-expression" type="button" onClick={addExpression}><Plus size={17} /> {view === '3d' ? 'Add 3D expression' : 'Add expression'}</button><label className="expression-search"><Search size={15} /><input aria-label="Filter expressions" placeholder="Filter expressions" value={expressionFilter} onChange={(event) => setExpressionFilter(event.target.value)} />{expressionFilter && <button type="button" onClick={() => setExpressionFilter('')} aria-label="Clear filter"><X size={14} /></button>}</label></div>
@@ -348,7 +352,6 @@ function App() {
                 <div className="empty-symbol">ƒ</div>
                 <strong>Start with an expression</strong>
                 <p>{view === '3d' ? <>Try <code>z = sin(sqrt(x^2 + y^2))</code> or add a shape below.</> : <>Try <code>y = sin(x)</code> or enter any equation.</>}</p>
-                <button type="button" onClick={addExpression}><Plus size={16} /> {view === '3d' ? 'Add 3D expression' : 'Add expression'}</button>
               </div>
             )}
             {filteredRows.map((row) => {
@@ -408,11 +411,11 @@ function App() {
             </div>
           </details>
 
-          <div className="parameter-panel">
+          <details className="parameter-panel" open={project.parameters.length > 0 || project.expressions.some(row => /\ba\b/.test(row.text)) ? true : undefined}><summary>Parameters · adjust values and animate</summary>
             <div className="parameter-head"><span>Parameters</span><div className="parameter-head-actions"><span className="parameter-count">{project.parameters.length + 1} active</span><select aria-label="New parameter letter" value={selectedParameterName} onChange={(event) => setParameterName(event.target.value)} disabled={!unusedNames.length}>{unusedNames.map((name) => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={addParameter} disabled={!unusedNames.length} aria-label="Add parameter" title="Add parameter"><Plus size={16} /> Add</button></div></div>
             <ParameterControl parameter={{ name: 'a', value: project.parameterA, ...project.parameterARange }} onChange={updateParameter} stopSignal={animationStop} />
             {project.parameters.map((parameter) => <ParameterControl key={parameter.name} parameter={parameter} onChange={updateParameter} onRemove={() => removeParameter(parameter.name)} stopSignal={animationStop} />)}
-          </div>
+          </details>
 
           <div className="sidebar-footer">
             <button type="button" onClick={newProject}><RotateCcw size={15} /> New project</button>
@@ -428,7 +431,8 @@ function App() {
               : view === '2d'
               ? <Graph2D graphs={graphs} geometry={project.geometry} onGeometryChange={(geometry) => setProject((current) => ({ ...current, geometry }))} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} linkedValues={sheetLinks} />
               : view === '3d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={graphCanvasRef} darkMode={theme === 'dark'} solids={project.solids} onSolidsChange={(solids) => setProject((current) => ({ ...current, solids }))} vectorFields={project.vectorFields} onVectorFieldsChange={(vectorFields) => setProject((current) => ({ ...current, vectorFields }))} definitions={definitions} />
-                : <MathTools parameterA={project.parameterA} definitions={definitions} />}
+                : null}
+            <MathWorkspace key={toolSession} active={view === 'tools'} parameterA={project.parameterA} definitions={definitions} />
             {(view === '2d' || view === '3d') && activeCount === 0 && !hasCanvasObjects && (
               <div className="graph-empty" role="status">
                 <div className="graph-empty-icon">{view === '2d' ? <ChartNoAxesCombined size={24} /> : <Box size={24} />}</div>
@@ -442,7 +446,7 @@ function App() {
           </div>
           {splitView && (view === '2d' || view === '3d') && <div className="secondary-workspace" aria-label={view === '2d' ? '3D graph in split view' : '2D graph in split view'}><div className="split-heading">{view === '2d' ? '3D Graph' : '2D Graph'}</div>{view === '2d' ? <Graph3D graphs={graphs} parameterA={project.parameterA} canvasRef={secondaryCanvasRef} darkMode={theme === 'dark'} solids={project.solids} onSolidsChange={(solids) => setProject((current) => ({ ...current, solids }))} vectorFields={project.vectorFields} onVectorFieldsChange={(vectorFields) => setProject((current) => ({ ...current, vectorFields }))} definitions={definitions} /> : <Graph2D graphs={graphs} geometry={project.geometry} onGeometryChange={(geometry) => setProject((current) => ({ ...current, geometry }))} parameterA={project.parameterA} canvasRef={secondaryCanvasRef} darkMode={theme === 'dark'} linkedValues={sheetLinks} />}</div>}
           </div>
-          <div className="visual-footer"><OfflineStatus /><span>{view === 'tools' ? 'Tool results are temporary; project expressions continue to save locally.' : view === 'sheet' ? 'Spreadsheet cells save with your project and recalculate from linked values.' : view === 'notebook' ? 'Notebook cells save with your project and update from live variables.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
+          <div className="visual-footer"><OfflineStatus /><span>{view === 'tools' ? 'Tool drafts stay during this session. Notebook cells save with your project.' : view === 'sheet' ? 'Spreadsheet cells save with your project and recalculate from linked values.' : view === 'notebook' ? 'Notebook cells save with your project and update from live variables.' : 'Your graphs stay on this device until you export them.'}</span><span>Use <kbd>⌘</kbd><kbd>S</kbd> to download a project copy</span></div>
         </section>
       </main>
 

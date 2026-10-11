@@ -1,21 +1,13 @@
-import { useState } from 'react'
-import { ArrowRight, Blocks, Braces, Calculator, ChartArea, ChartScatter, ChartSpline, Equal, Expand, FunctionSquare, Grid2X2, Grid3X3, Hourglass, ListFilter, Replace, Sigma, SquareFunction, Table2, Target, TrendingUp, Variable, Waypoints, type LucideIcon } from 'lucide-react'
+import { useToolDraft } from './ToolDrafts'
+import { ArrowRight, Blocks, Braces, Calculator, ChartArea, ChartScatter, ChartSpline, Equal, Expand, Grid2X2, Grid3X3, Hourglass, ListFilter, Replace, Sigma, SquareFunction, Target, TrendingUp, Variable, Waypoints, type LucideIcon } from 'lucide-react'
 import { EquationField } from './EquationField'
 import { MathResult } from './MathResult'
-import { SymbolicTools } from './SymbolicTools'
-import { DifferentialTools } from './DifferentialTools'
 import { runMathTool, type MathTool, type MatrixOperation, type ToolResult } from '../lib/mathTools'
 
 interface Props { parameterA: number; definitions: Readonly<Record<string, number>> }
 
 type ToolGroup = 'algebra' | 'calculus' | 'data'
-const groups: { id: ToolGroup; label: string; icon: LucideIcon }[] = [
-  { id: 'algebra', label: 'Algebra', icon: FunctionSquare },
-  { id: 'calculus', label: 'Calculus', icon: ChartSpline },
-  { id: 'data', label: 'Matrices & data', icon: Table2 },
-]
-
-const tools: { id: MathTool; label: string; example: string; hint: string; group: ToolGroup; icon: LucideIcon }[] = [
+export const numericTools: { id: MathTool; label: string; example: string; hint: string; group: ToolGroup; icon: LucideIcon }[] = [
   { id: 'calculate', label: 'Calculate', example: 'sqrt(2) + 3/4', hint: 'Evaluate a real or complex expression.', group: 'algebra', icon: Calculator },
   { id: 'simplify', label: 'Simplify', example: '2*x + 3*x', hint: 'Simplify an expression in x.', group: 'algebra', icon: ListFilter },
   { id: 'expand', label: 'Expand', example: '(x + 2)*(x - 3)', hint: 'Distribute products and integer powers over sums.', group: 'algebra', icon: Expand },
@@ -38,37 +30,26 @@ const tools: { id: MathTool; label: string; example: string; hint: string; group
   { id: 'regression', label: 'Regression', example: '1, 2; 2, 3; 3, 5', hint: 'Fit a least-squares line to x,y pairs.', group: 'data', icon: TrendingUp },
 ]
 
-export function MathTools({ parameterA, definitions }: Props) {
-  const [symbolic, setSymbolic] = useState(false)
-  const [differential, setDifferential] = useState(false)
-  const [tool, setTool] = useState<MathTool>('calculate')
-  const [input, setInput] = useState(tools[0].example)
-  const [latex, setLatex] = useState<string | undefined>()
-  const [start, setStart] = useState('0')
-  const [end, setEnd] = useState('1')
-  const [initialY, setInitialY] = useState('1')
-  const [center, setCenter] = useState('0')
-  const [order, setOrder] = useState('4')
-  const [variable, setVariable] = useState('y')
-  const [replacement, setReplacement] = useState('2')
-  const [assumption, setAssumption] = useState<'none' | 'positive' | 'nonnegative' | 'negative' | 'nonzero'>('none')
-  const [limitDirection, setLimitDirection] = useState<'both' | 'left' | 'right'>('both')
-  const [matrixOperation, setMatrixOperation] = useState<MatrixOperation>('add')
-  const [result, setResult] = useState<ToolResult | null>(null)
-  const [calculatedInputs, setCalculatedInputs] = useState('')
-  const [error, setError] = useState('')
-  const selected = tools.find((item) => item.id === tool)!
+export function NumericTool({ parameterA, definitions, tool }: Props & { tool: MathTool }) {
+  const [input, setInput] = useToolDraft('input', numericTools.find(item => item.id === tool)!.example)
+  const [latex, setLatex] = useToolDraft<string | undefined>('latex')
+  const [start, setStart] = useToolDraft('start', '0')
+  const [end, setEnd] = useToolDraft('end', '1')
+  const [initialY, setInitialY] = useToolDraft('initialY', '1')
+  const [center, setCenter] = useToolDraft('center', '0')
+  const [order, setOrder] = useToolDraft('order', '4')
+  const [variable, setVariable] = useToolDraft('variable', 'y')
+  const [replacement, setReplacement] = useToolDraft('replacement', '2')
+  const [assumption, setAssumption] = useToolDraft<'none' | 'positive' | 'nonnegative' | 'negative' | 'nonzero'>('assumption', 'none')
+  const [limitDirection, setLimitDirection] = useToolDraft<'both' | 'left' | 'right'>('limitDirection', 'both')
+  const [matrixOperation, setMatrixOperation] = useToolDraft<MatrixOperation>('matrixOperation', 'add')
+  const [matrixInputs, setMatrixInputs] = useToolDraft<Partial<Record<MatrixOperation, string>>>('matrixInputs', {})
+  const [result, setResult] = useToolDraft<ToolResult | null>('result', null)
+  const [calculatedInputs, setCalculatedInputs] = useToolDraft('calculatedInputs', '')
+  const [error, setError] = useToolDraft('error', '')
+  const selected = numericTools.find((item) => item.id === tool)!
   const dataset = tool === 'matrix' || tool === 'matrix-algebra' || tool === 'statistics' || tool === 'regression'
   const inputSignature = JSON.stringify({ tool, input, start, end, initialY, center, order, variable, replacement, assumption, limitDirection, matrixOperation, parameterA, definitions })
-
-  function selectTool(next: MathTool) {
-    setTool(next)
-    setInput(tools.find((item) => item.id === next)!.example)
-    setLatex(undefined)
-    setResult(null)
-    setCalculatedInputs('')
-    setError('')
-  }
 
   function calculate() {
     const value = (text: string) => text.trim() ? Number(text) : undefined
@@ -98,24 +79,6 @@ export function MathTools({ parameterA, definitions }: Props) {
   }
 
   return (
-    <div className="math-tools-view">
-      <div className="math-tools-intro">
-        <h2>Work through a calculation</h2>
-        <p>Choose a method, enter your expression, and inspect the result. The current value of <em>a</em> and any valid variables in your workspace are available in formulas.</p>
-      </div>
-      <div className="math-engine-picker" aria-label="Maths tool family"><button type="button" aria-pressed={!symbolic && !differential} onClick={() => { setSymbolic(false); setDifferential(false) }}>Quick & numerical tools</button><button type="button" aria-pressed={symbolic} onClick={() => { setSymbolic(true); setDifferential(false) }}>Exact symbolic tools</button><button type="button" aria-pressed={differential} onClick={() => { setSymbolic(false); setDifferential(true) }}>Differential equations</button></div>
-      {differential ? <DifferentialTools parameterA={parameterA} definitions={definitions} /> : symbolic ? <SymbolicTools parameterA={parameterA} definitions={definitions} /> : <div className="math-tools-grid">
-        <label className="math-tool-mobile-picker">Method
-          <select value={tool} onChange={(event) => selectTool(event.target.value as MathTool)}>
-            {groups.map((group) => <optgroup key={group.id} label={group.label}>{tools.filter((item) => item.group === group.id).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
-          </select>
-        </label>
-        <nav className="math-tool-list" aria-label="Maths operations">
-          {groups.map((group) => <div className="math-tool-group" key={group.id}>
-            <h3><group.icon size={15} aria-hidden="true" />{group.label}</h3>
-            {tools.filter((item) => item.group === group.id).map((item) => <button key={item.id} type="button" className={tool === item.id ? 'active' : ''} aria-pressed={tool === item.id} onClick={() => selectTool(item.id)}><item.icon size={16} strokeWidth={1.8} aria-hidden="true" /><span>{item.label}</span></button>)}
-          </div>)}
-        </nav>
         <section className="math-tool-card" aria-label={selected.label}>
           <div className="math-tool-card-header"><div className="math-tool-card-icon"><selected.icon size={23} strokeWidth={1.75} aria-hidden="true" /></div><div><h3>{selected.label}</h3><p>{selected.hint}</p></div></div>
           <label className="math-tool-label" htmlFor={dataset ? 'math-tool-data' : undefined}>{dataset ? 'Values' : tool === 'ode' ? 'dy/dx =' : 'Expression'}</label>
@@ -136,14 +99,13 @@ export function MathTools({ parameterA, definitions }: Props) {
           {tool === 'substitute' && <div className="math-tool-options"><label>Variable<select value={variable} onChange={(event) => setVariable(event.target.value)}><option value="x">x</option><option value="y">y</option><option value="z">z</option></select></label><label>Replace with<input type="text" value={replacement} onChange={(event) => setReplacement(event.target.value)} /></label></div>}
           {tool === 'matrix-algebra' && <div className="math-tool-options"><label>Operation<select value={matrixOperation} onChange={(event) => {
             const next = event.target.value as MatrixOperation
+            setMatrixInputs(current => ({ ...current, [matrixOperation]: input }))
             setMatrixOperation(next)
-            setInput(next === 'solve' ? '2, 1; 1, -1 | 5; 1' : ['add', 'subtract', 'multiply'].includes(next) ? '1, 2; 3, 4 | 5, 6; 7, 8' : '1, 2; 3, 4')
+            setInput(matrixInputs[next] ?? (next === 'solve' ? '2, 1; 1, -1 | 5; 1' : ['add', 'subtract', 'multiply'].includes(next) ? '1, 2; 3, 4 | 5, 6; 7, 8' : '1, 2; 3, 4'))
           }}><option value="add">Add</option><option value="subtract">Subtract</option><option value="multiply">Multiply</option><option value="transpose">Transpose A</option><option value="determinant">Determinant</option><option value="inverse">Inverse</option><option value="eigenvalues">Eigenvalues</option><option value="eigenvectors">Eigenvalues and vectors</option><option value="solve">Solve Ax = b</option></select></label></div>}
           <button className="math-tool-run" type="button" onClick={calculate}>Calculate result <ArrowRight size={16} aria-hidden="true" /></button>
           {error && calculatedInputs === inputSignature && <p className="math-tool-error" role="alert">{error}</p>}
           {result && calculatedInputs === inputSignature && <div className="math-tool-result" role="status"><span>{result.title}</span><MathResult value={result.value} />{result.note && <p>{result.note}</p>}</div>}
         </section>
-      </div>}
-    </div>
   )
 }

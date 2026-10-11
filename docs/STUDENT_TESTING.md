@@ -45,3 +45,16 @@ Measure input-to-paint and 2D interaction on documented scenes; record a 3D perf
 | Highest-impact issue / reproduction steps | |
 
 After the sessions, prioritise task failures, data loss and inaccessible paths first. Fix findings, rerun the affected tasks and update the release report with actual evidence. Leave untested platforms and tasks explicitly open.
+
+## Follow-up for the 11 October interface changes
+
+Add these observations to the session sheet:
+
+- First graph: does the student start in the single expression editor without needing the optional summary? Can they find parameters after entering `y = a*x^2`?
+- Maths: ask for an exact factorisation, then an approximate equation solution. Observe whether Task and Result type make sense without explaining the engine. Edit a draft, visit another workspace, return, and use text Undo.
+- Notebook: add a note, calculation and graph; then locate an answer check under More cells. Insert an Activity template and observe the focus/scroll destination.
+- Data: give the first pair without naming cells. Record whether the Headers row and row-2 guidance prevent accidental exclusion.
+- Zoom/touch: verify that save feedback and Undo remain discoverable while the header wraps. Enter a long cell value and scroll the spreadsheet horizontally without moving the entire page.
+- VoiceOver: record actual announcements for saving/failure feedback, Task/Result type, new-cell focus and spreadsheet header cells. Record whether native text Undo and explicit project Undo are distinguishable.
+
+Status remains **awaiting participants, physical hardware and spoken-output evidence**. Record actual observations before marking these checks passed.

@@ -55,3 +55,40 @@ it('navigates workspace tabs with arrows, Home and End', async () => {
     expect(host.querySelector(`[aria-labelledby="${tabs[index].id}"]`)).not.toBeNull()
   }
 })
+
+it('leaves text Undo to editors and keeps project Undo available outside them', async () => {
+  document.body.append(host); root = createRoot(host)
+  await act(async () => root.render(<App />))
+  const input = host.querySelector<HTMLInputElement>('[aria-label="Project title"]')!
+  input.focus()
+  const textUndo = new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true })
+  await act(async () => input.dispatchEvent(textUndo))
+  expect(textUndo.defaultPrevented).toBe(false)
+  const projectUndo = new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true })
+  await act(async () => host.querySelector('[role="tab"]')!.dispatchEvent(projectUndo))
+  expect(projectUndo.defaultPrevented).toBe(true)
+})
+
+it('reveals and focuses newly inserted notebook notes', async () => {
+  document.body.append(host); root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook"]')!.click())
+  const add = [...host.querySelectorAll<HTMLButtonElement>('.notebook-toolbar button')].find(button => button.textContent?.includes('Add note'))!
+  await act(async () => add.click())
+  expect(document.activeElement).toBe(host.querySelector('[aria-label="Note 1"]'))
+  expect(host.querySelectorAll('.notebook-toolbar > button')).toHaveLength(3)
+  expect(host.querySelector('[aria-label="More notebook cells"]')).not.toBeNull()
+})
+
+it('reports a failed autosave in the persistent status region', async () => {
+  vi.useFakeTimers()
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Storage full', 'QuotaExceededError') })
+  document.body.append(host); root = createRoot(host)
+  await act(async () => root.render(<App />))
+  await act(async () => vi.advanceTimersByTime(300))
+  const status = host.querySelector('.save-status-bar')!
+  expect(status.textContent).toContain('Could not save locally. Export a project copy.')
+  expect(status.getAttribute('role')).toBe('status')
+  expect(status.classList.contains('save-failed')).toBe(true)
+  vi.useRealTimers()
+})

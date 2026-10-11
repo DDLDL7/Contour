@@ -69,13 +69,13 @@ Keep the construction model separate from a drawing's pixels: objects need stabl
 
 ### Interface review — 11 October 2026
 
-Independent design and browser/source reviews scored the current interface 28/40: a good visual foundation with workflow simplification still needed. See the [full review](.impeccable/critique/2026-10-11T11-17-08Z__src-app-tsx.md). These are open findings, not completed changes:
+Independent design and browser/source reviews scored the current interface 28/40: a good visual foundation with workflow simplification still needed. See the [full review](.impeccable/critique/2026-10-11T11-17-08Z__src-app-tsx.md). The five priority findings were implemented on 11 October; validation and remaining external gates are recorded in [release testing](docs/RELEASE_TESTING.md#interface-follow-through--11-october-2026):
 
-- [ ] Keep save status, save-failure guidance and Undo available at narrower widths and browser zoom.
-- [ ] Organise Maths Tools around tasks with appropriate exact/approximate options; verify text Undo and preserve tool drafts across navigation.
-- [ ] Simplify duplicate expression panels and repeated Add actions; settle the default layout with the product owner.
-- [ ] Simplify Notebook cell insertion, reveal/focus new cells, and retain one Activity templates dropdown.
-- [ ] Clearly label spreadsheet row 1 as headers and direct data entry to row 2.
+- [x] Keep saving/recovery feedback in a persistent status strip and Undo/Redo available at narrower widths and browser zoom.
+- [x] Group Maths Tools by task, with relevant exact/approximate/working options. Preserve session drafts and results across tasks/views and matrix operations; cancel workers on leaving. Text-field Undo stays with the editor. New/imported projects reset tool drafts.
+- [x] Default to one expression editor and a larger graph; retain an optional expression summary that opens the appropriate 2D/3D editor. Remove duplicate Add actions and collapse unused parameters. Other workspaces use the full width.
+- [x] Lead Notebook with Note, Calculation and Graph; describe advanced cells in one More cells menu. Reveal/focus inserted cells and template content. Retain one Activity templates dropdown.
+- [x] Label spreadsheet row 1 as headers, direct data entry to A2/B2, and keep table columns readable with local horizontal scrolling. Correct selected geometry-tool contrast in light mode.
 
 Student usability sessions, real touch-device checks and assistive-technology validation remain separate release gates. This expert review does not complete them.
 

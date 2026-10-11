@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { ArrowDown, ArrowUp, Calculator, Eye, FileText, FormInput, LineChart, Plus, Table2, Trash2, Zap } from 'lucide-react'
+import { ArrowDown, ArrowUp, Calculator, FileText, LineChart, Trash2 } from 'lucide-react'
 import { MathfieldElement } from 'mathlive'
 import { EquationField } from './EquationField'
 import { MathResult } from './MathResult'
@@ -95,6 +95,18 @@ export function NotebookView({ darkMode = false, cells, expressions, definitions
   const values = useMemo(() => ({ a: parameterA, ...definitions }), [parameterA, definitions])
   const allParameters = useMemo(() => [{ name: 'a', value: parameterA, ...parameterARange }, ...parameters], [parameterA, parameterARange, parameters])
   const graphDefinitions = useMemo(() => ({ a: parameterA, ...definitions, ...Object.fromEntries(Object.entries(evaluateSpreadsheet(spreadsheet, definitions, parameterA)).flatMap(([address, value]) => value.value === null ? [] : [[address, value.value]])) }), [spreadsheet, definitions, parameterA])
+  const pendingFocus = useRef<string | number | null>(null)
+  const cellsRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (pendingFocus.current === null) return
+    const targetId = typeof pendingFocus.current === 'number' ? cells[pendingFocus.current]?.id : pendingFocus.current
+    const cell = [...(cellsRef.current?.querySelectorAll<HTMLElement>('[data-cell-id]') ?? [])].find(item => item.dataset.cellId === targetId)
+    if (!cell) return
+    pendingFocus.current = null
+    cell.scrollIntoView?.({ block: 'nearest' })
+    const field = cell.querySelector<HTMLElement>('textarea, math-field, input, select')
+    ;(field ?? cell).focus()
+  }, [cells])
   const atLimit = cells.length >= 60
 
   function add(kind: NotebookCell['kind']) {
@@ -109,6 +121,7 @@ export function NotebookView({ darkMode = false, cells, expressions, definitions
             : kind === 'graph' ? { id, kind, expressionId: expressions[0]?.id ?? '' }
               : kind === 'table' ? { id, kind, sheetId: activeSpreadsheetSheet(spreadsheet).id }
                 : { id, kind, label: 'Toggle graph', action: 'toggle-expression', expressionId: expressions[0]?.id ?? '', parameterName: 'a', value: parameterA }
+    pendingFocus.current = id
     onChange([...cells, next])
   }
 
@@ -126,20 +139,25 @@ export function NotebookView({ darkMode = false, cells, expressions, definitions
 
   return <div className="notebook-view">
     <div className="notebook-heading"><div><h2>Notebook</h2><p>Keep notes and calculations beside your graphs. Changes save with this project.</p></div></div>
-    <div className="notebook-templates"><label>Activity templates<select aria-label="Activity templates" value="" onChange={event=>{if(event.target.value)onAddActivity(event.target.value as ActivityTemplate)}}><option value="">Choose a template…</option>{activityTemplates.map(template=><option key={template.id} value={template.id} disabled={cells.length+template.cells>60 || (template.id==='data' && spreadsheetSheets(spreadsheet).length>=20)}>{template.label}{cells.length+template.cells>60?' — notebook full':''}</option>)}</select></label><p>Choose a template to append its linked examples, guided questions and prompts.</p></div>
+    <div className="notebook-templates"><label>Activity templates<select aria-label="Activity templates" value="" onChange={event=>{if(event.target.value){ pendingFocus.current = cells.length; onAddActivity(event.target.value as ActivityTemplate) }}}><option value="">Choose a template…</option>{activityTemplates.map(template=><option key={template.id} value={template.id} disabled={cells.length+template.cells>60 || (template.id==='data' && spreadsheetSheets(spreadsheet).length>=20)}>{template.label}{cells.length+template.cells>60?' — notebook full':''}</option>)}</select></label><p>Choose a template to append its linked examples, guided questions and prompts.</p></div>
     <div className="notebook-toolbar" aria-label="Add notebook cell">
       <button type="button" disabled={atLimit} onClick={() => add('text')}><FileText size={16} /> Add note</button>
-      <button type="button" disabled={atLimit} onClick={() => add('answer')}>Add answer check</button>
       <button type="button" disabled={atLimit} onClick={() => add('calculation')}><Calculator size={16} /> Add calculation</button>
-      <button type="button" disabled={atLimit} onClick={() => add('visibility')}><Eye size={16} /> Add graph checkbox</button>
-      <button type="button" disabled={atLimit} onClick={() => add('input')}><FormInput size={16} /> Add input box</button>
       <button type="button" disabled={atLimit} onClick={() => add('graph')}><LineChart size={16} /> Add graph</button>
-      <button type="button" disabled={atLimit} onClick={() => add('table')}><Table2 size={16} /> Add table</button>
-      <button type="button" disabled={atLimit} onClick={() => add('sequence')}>Add action sequence</button>
-      <button type="button" disabled={atLimit} onClick={() => add('action')}><Zap size={16} /> Add action button</button>
+      <label className="notebook-more">More cells<select aria-label="More notebook cells" value="" disabled={atLimit} onChange={event => { if (event.target.value) add(event.target.value as NotebookCell['kind']) }}>
+        <option value="">Choose a cell…</option>
+        <option value="table">Table — link spreadsheet data</option>
+        <optgroup label="Interactive activities">
+          <option value="answer">Answer check — compare equivalent expressions</option>
+          <option value="visibility">Graph checkbox — show or hide a graph</option>
+          <option value="input">Input box — change a parameter</option>
+          <option value="action">Action button — run one change</option>
+          <option value="sequence">Action sequence — run several changes</option>
+        </optgroup>
+      </select></label>
     </div>
-    {cells.length === 0 && <div className="notebook-empty"><FileText size={28} /><strong>Your notebook is blank</strong><p>Add a note, a live calculation, or a control for a graph or parameter.</p><button type="button" onClick={() => add('text')}><Plus size={16} /> Add first note</button></div>}
-    <div className="notebook-cells">{cells.map((cell, index) => <section className="notebook-cell" key={cell.id} aria-label={`${cell.kind} cell ${index + 1}`}>
+    {cells.length === 0 && <div className="notebook-empty"><FileText size={28} /><strong>Your notebook is blank</strong><p>Start with Add note above, or choose an activity template for guided examples.</p></div>}
+    <div className="notebook-cells" ref={cellsRef}>{cells.map((cell, index) => <section className="notebook-cell" key={cell.id} data-cell-id={cell.id} tabIndex={-1} aria-label={`${cell.kind} cell ${index + 1}`}>
       <div className="notebook-cell-head"><span>{index + 1} · {cell.kind === 'sequence' ? 'Action sequence' : cell.kind === 'answer' ? 'Answer check' : cell.kind === 'text' ? 'Note' : cell.kind === 'calculation' ? 'Calculation' : cell.kind === 'visibility' ? 'Graph checkbox' : cell.kind === 'input' ? 'Input box' : cell.kind === 'graph' ? 'Graph' : cell.kind === 'table' ? 'Table' : 'Action button'}</span><div>
         <button type="button" aria-label={`Move cell ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={15} /></button>
         <button type="button" aria-label={`Move cell ${index + 1} down`} title="Move down" disabled={index === cells.length - 1} onClick={() => move(index, 1)}><ArrowDown size={15} /></button>

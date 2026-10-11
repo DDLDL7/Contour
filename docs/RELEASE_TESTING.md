@@ -129,3 +129,44 @@ All budgets pass. Two thousand compile/project-validation cycles retain approxim
 | Public Mac distribution | [Script and runbook](MAC_DISTRIBUTION.md) prepared. Preflight correctly refuses to proceed without Developer ID credentials. The user does not yet have them; signing, notarisation, Gatekeeper and second-Mac installation remain blocked. |
 
 No public signed release, full browser matrix, complete accessibility audit or completed student study is claimed.
+
+## Interface follow-through — 11 October 2026
+
+Implemented the five priority findings from the independent interface critique. The original critique remains a dated baseline, not a statement that these findings are still open.
+
+### Changes
+
+- Save/recovery feedback has its own wrapping status strip, outside header compression. Save failures use the error colour and a live status region. Undo/Redo remain visible at narrow widths.
+- One editable expression panel is the default. The optional summary switches to the appropriate 2D/3D view and focuses the selected expression. Repeated Add actions were removed; unused parameters start collapsed. Maths, spreadsheet and notebook views use the full width.
+- Maths Tools has one task selector grouped into Algebra, Calculus and Matrices & data. Exact, approximate and worked results appear only for relevant tasks. Existing mathematical implementations remain; duplicate limited symbolic routes use the broader exact implementation. Numerical ODE work uses the existing adaptive explorer.
+- Session drafts, options and results survive task/view navigation; separate result types and matrix operations retain their drafts. A newly selected result type starts from the current expression where compatible. Leaving an active solver cancels its worker. Opening/creating a project clears session drafts. These drafts are not stored in the project file and do not survive reload; the interface says so.
+- Native text Undo is no longer intercepted by project history in inputs, textareas, editable content or MathLive fields. Project Undo remains available through its button and shortcuts outside editors.
+- Notebook leads with three cell actions and a descriptive More cells selector. Inserted cells and templates reveal/focus their first editable control. All activity templates remain in one dropdown.
+- Spreadsheet header labels explicitly identify row 1; instructions direct data entry to row 2. Table columns retain usable widths and scroll within the table on narrow screens.
+- Selected geometry-tool text uses the theme's action foreground, repairing dark-blue-on-blue text in light mode.
+
+### Automated evidence
+
+The existing release suite passed **206 tests across 36 files** after the main implementation. Subsequent focused runs passed **seven new regression cases** plus the affected existing accessibility/template tests. The new cases cover independent tool drafts across navigation, worker cancellation, expression transfer between result types, matrix-operation draft restoration, text versus project Undo, notebook insertion focus and failed-autosave feedback. This is 213 passing cases across the full-suite and focused runs, not a claim that every UI state is covered.
+
+The final `npm run desktop:build -- --bundles app` passes, including runtime preparation, TypeScript, the production web build and the 20.73 MiB Mac application bundle. Existing dependency-directive and large-chunk warnings remain; no new dependency or browser was installed.
+
+### Native Chrome inspection
+
+Used a fresh tab and separate local development origin; this does not replace the previous production/offline test matrix.
+
+- Inspected the single-editor graph layout and expanded graph area in dark mode. Confirmed the light 2D sine graph and a light 3D sphere scene.
+- Selected Factor through the task selector and obtained `(x - 1)*(x + 1)*(x^2 + 1)` for `x^4-1` using the bundled exact engine.
+- Entered a factor draft, switched workspaces and returned with the draft retained. Text Undo in the symbolic textarea removed the latest text edit rather than invoking project history.
+- Inspected Notebook in dark and light modes, including 175%/200% zoom. Add note focused the new textarea and revealed it; typing updated the note.
+- Verified saving feedback and Undo/Redo remain visible in the wrapped header at 200% and the narrow 400% layout. Restored zoom to 100%.
+- Inspected spreadsheet header labels and guidance in light mode. The first inspection caught a clipped row label; the confirmation at 400% shows the complete “1 · Headers” label with readable cells and table-local overflow.
+- A light 2D inspection caught selected geometry-tool contrast; the confirmation shows white text on the blue selection background. Calculated sRGB contrast: 5.82:1. Save-status text is 5.33:1 light / 8.12:1 dark; save-failure text is 6.78:1 light / 11.38:1 dark. These are specific token pairs, not an exhaustive rendered contrast audit.
+
+### External gates still open
+
+No student participants or physical touch devices are available in this session. The [student/device protocol](STUDENT_TESTING.md) now includes follow-up tasks for the revised interface. No participant results are invented.
+
+A native Cmd-F5 attempt did not produce an observable VoiceOver session; no VoiceOver process was found afterward. Spoken output and an experienced-user walkthrough remain unverified. Automated axe/keyboard checks and accessibility-tree labels do not substitute for that evidence or establish full WCAG conformance.
+
+The user still lacks Developer ID distribution credentials. Signing, notarisation, Gatekeeper and installation on another Mac remain blocked as recorded above. No public distribution was attempted. Broader browser/export/performance gates in the preceding table also remain open; this interface increment does not silently close them.

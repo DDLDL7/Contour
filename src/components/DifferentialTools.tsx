@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
+import { useToolDraft } from './ToolDrafts'
 import { type OdeSolution } from '../lib/ode'
 
 export function DifferentialTools({ parameterA, definitions }: { parameterA: number; definitions: Readonly<Record<string, number>> }) {
   const worker=useRef<Worker | null>(null)
   const timer=useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [busy,setBusy]=useState(false)
-  const [errorSignature,setErrorSignature]=useState('')
+  const [errorSignature, setErrorSignature] = useToolDraft('errorSignature', '')
   useEffect(()=>()=>{worker.current?.terminate();clearTimeout(timer.current)},[])
   function stop(){worker.current?.terminate();worker.current=null;clearTimeout(timer.current);setBusy(false)}
-  const [system, setSystem] = useState(false)
-  const [first, setFirst] = useState('y')
-  const [second, setSecond] = useState('-x')
-  const [start, setStart] = useState('0'); const [end, setEnd] = useState('6.28')
-  const [initialX, setInitialX] = useState('1'); const [initialY, setInitialY] = useState('0')
-  const [tolerance, setTolerance] = useState('0.000001')
-  const [result, setResult] = useState<{ solution: OdeSolution; arrows: number[][]; signature: string } | null>(null)
-  const [error, setError] = useState('')
+  const [system, setSystem] = useToolDraft('system', false)
+  const [first, setFirst] = useToolDraft('first', 'y')
+  const [second, setSecond] = useToolDraft('second', '-x')
+  const [start, setStart] = useToolDraft('start', '0'); const [end, setEnd] = useToolDraft('end', '6.28')
+  const [initialX, setInitialX] = useToolDraft('initialX', '1'); const [initialY, setInitialY] = useToolDraft('initialY', '0')
+  const [tolerance, setTolerance] = useToolDraft('tolerance', '0.000001')
+  const [result, setResult] = useToolDraft<{ solution: OdeSolution; arrows: number[][]; signature: string } | null>('result', null)
+  const [error, setError] = useToolDraft('error', '')
   const signature = JSON.stringify({ system, first, second, start, end, initialX, initialY, tolerance, parameterA, definitions })
   function calculate() {
     try {

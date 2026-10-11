@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
+import { useToolDraft } from './ToolDrafts'
 import { SymbolicEngine, symbolicMethods, symbolicRequest, type SymbolicMethod, type SymbolicOptions, type SymbolicResult } from '../lib/symbolic'
 
-export function SymbolicTools({ parameterA, definitions }: { parameterA: number; definitions: Readonly<Record<string, number>> }) {
+export function SymbolicTools({ parameterA, definitions, method }: { parameterA: number; definitions: Readonly<Record<string, number>>; method: SymbolicMethod }) {
   const engine = useRef<SymbolicEngine | null>(null)
   const job = useRef(0)
-  const [method, setMethod] = useState<SymbolicMethod>('exact')
-  const [input, setInput] = useState<string>(symbolicMethods[0][2])
-  const [options, setOptions] = useState<Omit<SymbolicOptions, 'definitions'>>({ variable: 'x', domain: 'real', assumption: 'none', start: '0', end: 'pi', direction: 'both', order: 6, initialY: '1' })
+  const [input, setInput] = useToolDraft<string>('input', symbolicMethods.find(item => item[0] === method)![2])
+  const [options, setOptions] = useToolDraft<Omit<SymbolicOptions, 'definitions'>>('options', { variable: 'x', domain: 'real', assumption: 'none', start: '0', end: 'pi', direction: 'both', order: 6, initialY: '1' })
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
-  const [result, setResult] = useState<SymbolicResult | null>(null)
-  const [error, setError] = useState('')
-  const [resultSignature, setResultSignature] = useState('')
+  const [result, setResult] = useToolDraft<SymbolicResult | null>('result', null)
+  const [error, setError] = useToolDraft('error', '')
+  const [resultSignature, setResultSignature] = useToolDraft('resultSignature', '')
   const signature = JSON.stringify({ method, input, options, parameterA, definitions })
   const selected = symbolicMethods.find(item => item[0] === method)!
   useEffect(() => () => { job.current++; engine.current?.cancel() }, [])
@@ -32,8 +32,8 @@ export function SymbolicTools({ parameterA, definitions }: { parameterA: number;
   }
   function change<K extends keyof typeof options>(key: K, value: typeof options[K]) { setOptions(current => ({ ...current, [key]: value })) }
   return <section className="math-tool-card" aria-label="Exact symbolic mathematics">
-    <div className="math-tool-card-header"><div><h3>Exact symbolic mathematics</h3><p>Runs on this device. Use semicolons between equations, inequalities, or matrix rows. Infinity bounds use oo or -oo.</p></div></div>
-    <div className="math-tool-options"><label>Method<select value={method} disabled={busy} onChange={event => { const next = event.target.value as SymbolicMethod; setMethod(next); setInput(symbolicMethods.find(item => item[0] === next)![2]); setResult(null); setError('') }}>{symbolicMethods.map(item => <option key={item[0]} value={item[0]}>{item[1]}</option>)}</select></label>
+    <div className="math-tool-card-header"><div><h3>{selected[1]}</h3><p>Runs on this device. Use semicolons between equations, inequalities, or matrix rows. Infinity bounds use oo or -oo.</p></div></div>
+    <div className="math-tool-options">
       <label>Variable<input value={options.variable} disabled={busy} onChange={event => change('variable', event.target.value)} /></label>
       <label>Domain<select value={options.domain} disabled={busy} onChange={event => change('domain', event.target.value as typeof options.domain)}><option value="real">Real</option><option value="complex">Complex</option></select></label>
       <label>Variable assumption<select value={options.assumption} disabled={busy} onChange={event => change('assumption', event.target.value as typeof options.assumption)}><option value="none">None</option><option value="positive">Positive</option><option value="nonnegative">Nonnegative</option><option value="negative">Negative</option><option value="nonzero">Nonzero</option></select></label>
