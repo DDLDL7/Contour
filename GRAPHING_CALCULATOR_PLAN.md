@@ -67,6 +67,18 @@ Keep the construction model separate from a drawing's pixels: objects need stabl
 
 ## 2. Design one workspace with several views
 
+### Interface review — 11 October 2026
+
+Independent design and browser/source reviews scored the current interface 28/40: a good visual foundation with workflow simplification still needed. See the [full review](.impeccable/critique/2026-10-11T11-17-08Z__src-app-tsx.md). These are open findings, not completed changes:
+
+- [ ] Keep save status, save-failure guidance and Undo available at narrower widths and browser zoom.
+- [ ] Organise Maths Tools around tasks with appropriate exact/approximate options; verify text Undo and preserve tool drafts across navigation.
+- [ ] Simplify duplicate expression panels and repeated Add actions; settle the default layout with the product owner.
+- [ ] Simplify Notebook cell insertion, reveal/focus new cells, and retain one Activity templates dropdown.
+- [ ] Clearly label spreadsheet row 1 as headers and direct data entry to row 2.
+
+Student usability sessions, real touch-device checks and assistive-technology validation remain separate release gates. This expert review does not complete them.
+
 The starting screen will open directly into a usable calculator. Students can immediately type something like `y = x²`, with examples available nearby.
 
 The main layout will contain:
